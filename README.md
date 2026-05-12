@@ -10,17 +10,20 @@
   <img src="https://img.shields.io/badge/workflow-Dify-4B7BEC" alt="Dify" />
   <img src="https://img.shields.io/badge/platform-Bilibili%20%7C%20YouTube-ff69b4" alt="Platforms" />
   <img src="https://img.shields.io/badge/no%20database-v1-success" alt="No database" />
-</p>
 
-<p align="center">
-  <a href="#中文">中文</a> ·
-  <a href="#english">English</a> ·
-  <a href="#api-reference">API Reference</a>
-</p>
 
 ---
 
-## 中文
+```text
+## 🎬 项目简介
+Video Knowledge API 是基于bilinote开发的轻量视频解析服务。
+
+输入一个 YouTube 或 Bilibili 视频链接，API 会返回结构化 JSON，包括：
+
+- 视频标题、时长、作者等元信息
+- 带时间轴的字幕分段
+- 合并后的纯文本字幕
+- 适合工作流处理的分块文本
 
 ### 项目简介
 
@@ -33,447 +36,170 @@
 - Bilibili 优先尝试官方 player API 字幕直拉，再回退到 `yt-dlp`。
 - 如果 Bilibili 字幕需要登录态，可以配置 Cookie。
 - 不做前端、不做数据库、不做本地 Whisper、不做 LLM 总结。
+```
 
-### 功能特性
+```text
+基本流程：
 
-- **Dify 友好输出**：返回 `timeline_text`、`plain_text`、`segments` 和 `chunks`。
-- **时间轴保留**：每段字幕包含 `start`、`end`、`duration` 和 `timestamp`。
-- **长视频分块**：`max_chars_per_chunk` 避免一次性把长文本塞进 LLM。
-- **Bilibili 登录态**：支持保存 Cookie，用于读取需要登录态的 AI 字幕。
-- **Codespaces 友好**：提供 `.devcontainer`，自动安装依赖并启动服务。
-- **OpenAPI 可导入**：Dify 自定义 API Tool 可导入 `/openapi.json`。
+视频链接 -> API 解析 -> 字幕 / 时间轴 / 分块文本 -> 下游应用分析
 
-### 快速开始：GitHub Codespaces
+```
 
-1. 在 GitHub 打开这个仓库。
-2. 点击 `Code -> Codespaces -> Create codespace`。
-3. 等待依赖安装完成。
-4. 服务会自动尝试在后台启动。如果没有启动，手动运行：
+```text
+🚀 快速部署：GitHub Codespaces
+在 GitHub 仓库页面：
 
-```bash
+点击绿色的 Code
+选择 Codespaces
+点击 Create codespace on main
+等待 Codespaces 打开
+等待依赖安装完成
+服务通常会自动运行在 8000 端口。
+
+手动启动命令：
+
 python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
+在 Codespaces 的 Ports 面板中找到 8000，将 Visibility 改为 Public，复制公开地址：
 
-5. 打开 Codespaces 的 `Ports` 面板。
-6. 找到 `8000` 端口。
-7. 将 Visibility 改成 `Public`。
-8. 复制公网地址，形如：
+https://你的-codespace-名字-8000.app.github.dev
+健康检查：
 
-```text
-https://<codespace-name>-8000.app.github.dev
-```
+curl https://你的-codespace-名字-8000.app.github.dev/health
+返回示例：
 
-测试连通性：
-
-```bash
-curl https://<codespace-name>-8000.app.github.dev/health
-```
-
-预期返回：
-
-```json
-{"ok":true,"service":"video-analysis-api"}
-```
-
-### Dify HTTP Request 配置
-
-URL:
-
-```text
-https://<codespace-name>-8000.app.github.dev/v1/video/extract
-```
-
-Method:
-
-```text
-POST
-```
-
-Headers:
-
-```text
-Content-Type: application/json
-```
-
-Body:
-
-```json
-{
-  "url": "{{video_url}}",
-  "languages": ["zh-Hans", "zh-CN", "zh", "en"],
-  "include_metadata": true,
-  "max_chars_per_chunk": 5000
-}
-```
-
-Dify 后续节点优先使用：
-
-```text
-{{api_response.dify_payload.timeline_text}}
-{{api_response.dify_payload.plain_text}}
-{{api_response.dify_payload.chunks}}
-```
-
-### 推荐安全配置
-
-如果端口设为 Public，建议一定设置 `VIDEO_API_TOKEN`：
-
-```bash
-export VIDEO_API_TOKEN="replace-with-a-long-random-token"
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Dify Header 增加：
-
-```text
-Authorization: Bearer replace-with-a-long-random-token
-```
-
-### Bilibili Cookie 登录态
-
-有些 Bilibili 视频未登录时只暴露弹幕，不暴露 AI 字幕。此时可以配置 Cookie。这个服务不接收账号密码，也不做扫码登录，只保存学生自己提供的 Cookie 字符串。
-
-Cookie 管理接口要求已经设置 `VIDEO_API_TOKEN`，否则会返回 `403`。
-
-写入 Bilibili Cookie：
-
-```bash
-curl -X POST "https://<codespace-name>-8000.app.github.dev/v1/auth/cookies" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer replace-with-a-long-random-token" \
-  -d '{
-    "platform": "bilibili",
-    "cookie": "SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"
-  }'
-```
-
-查看 Cookie 状态，接口不会返回 Cookie 明文：
-
-```bash
-curl "https://<codespace-name>-8000.app.github.dev/v1/auth/cookies/bilibili" \
-  -H "Authorization: Bearer replace-with-a-long-random-token"
-```
-
-删除 Cookie：
-
-```bash
-curl -X DELETE "https://<codespace-name>-8000.app.github.dev/v1/auth/cookies/bilibili" \
-  -H "Authorization: Bearer replace-with-a-long-random-token"
-```
-
-本地保存位置：
-
-```text
-.secrets/cookies.json
-```
-
-`.secrets/` 已加入 `.gitignore`。不要把 Cookie 提交到 GitHub。
-
-### 与 BiliNote 的关系
-
-本项目借鉴 BiliNote 的这些设计：
-
-- 平台字幕优先。
-- Bilibili 需要登录态时用 Cookie。
-- Bilibili 可通过 player API 直拉字幕。
-- `yt-dlp` 作为通用元信息和字幕兜底工具。
-- 预留 `frame_interval=6` 与 `grid_size=[2,2]` 给后续关键帧能力。
-
-但本项目刻意不复制 BiliNote 的完整产品形态：
-
-- 不做 React 前端。
-- 不做任务队列。
-- 不做数据库。
-- 不做模型供应商配置。
-- 不做本地转写器。
-- 不生成 Markdown 笔记。
-- 不做浏览器扩展。
-
-### 本地开发
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-python -m pytest -q
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
-Windows PowerShell:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-python -m pytest -q
-python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
-```
-
----
-
-## English
-
-### Overview
-
-This service is a lightweight video transcript API for Dify classroom workflows. Students deploy it in their own GitHub Codespaces, expose port `8000`, and call it from Dify Cloud through an HTTP Request node or a custom API tool.
-
-It borrows the practical parts of BiliNote, but keeps the implementation small:
-
-- Return subtitles and timestamps directly when available.
-- Use `youtube-transcript-api` first for YouTube.
-- Use Bilibili player API first for Bilibili subtitles, then fall back to `yt-dlp`.
-- Support Cookie-based login state for Bilibili subtitle access.
-- No frontend, no database, no local Whisper, and no LLM summarization in v1.
-
-### Features
-
-- **Dify-ready JSON**: `timeline_text`, `plain_text`, `segments`, and `chunks`.
-- **Timestamp preservation**: each segment includes `start`, `end`, `duration`, and `timestamp`.
-- **Long-video chunking**: `max_chars_per_chunk` keeps LLM inputs manageable.
-- **Bilibili Cookie support**: access login-only AI subtitles when the student provides Cookie.
-- **Codespaces deployment**: `.devcontainer` installs dependencies and starts the API.
-- **OpenAPI support**: Dify can import `/openapi.json`.
-
-### Quick Start: GitHub Codespaces
-
-1. Open this repository on GitHub.
-2. Click `Code -> Codespaces -> Create codespace`.
-3. Wait for dependency installation.
-4. The service should start automatically. If it does not, run:
-
-```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-5. Open the Codespaces `Ports` panel.
-6. Find port `8000`.
-7. Set visibility to `Public`.
-8. Copy the public URL:
-
-```text
-https://<codespace-name>-8000.app.github.dev
-```
-
-Health check:
-
-```bash
-curl https://<codespace-name>-8000.app.github.dev/health
-```
-
-Expected:
-
-```json
-{"ok":true,"service":"video-analysis-api"}
-```
-
-### Dify HTTP Request
-
-URL:
-
-```text
-https://<codespace-name>-8000.app.github.dev/v1/video/extract
-```
-
-Method:
-
-```text
-POST
-```
-
-Headers:
-
-```text
-Content-Type: application/json
-```
-
-Body:
-
-```json
-{
-  "url": "{{video_url}}",
-  "languages": ["zh-Hans", "zh-CN", "zh", "en"],
-  "include_metadata": true,
-  "max_chars_per_chunk": 5000
-}
-```
-
-Recommended Dify fields:
-
-```text
-{{api_response.dify_payload.timeline_text}}
-{{api_response.dify_payload.plain_text}}
-{{api_response.dify_payload.chunks}}
-```
-
-### Bearer Token
-
-For a public Codespaces port, set `VIDEO_API_TOKEN`:
-
-```bash
-export VIDEO_API_TOKEN="replace-with-a-long-random-token"
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-Then add this Dify header:
-
-```text
-Authorization: Bearer replace-with-a-long-random-token
-```
-
-### Bilibili Cookie Login State
-
-Some Bilibili videos expose AI subtitles only when logged in. This service does not handle usernames, passwords, or QR-code login. It only stores a Cookie string provided by the student.
-
-Cookie management requires `VIDEO_API_TOKEN`.
-
-Set Bilibili Cookie:
-
-```bash
-curl -X POST "https://<codespace-name>-8000.app.github.dev/v1/auth/cookies" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer replace-with-a-long-random-token" \
-  -d '{
-    "platform": "bilibili",
-    "cookie": "SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"
-  }'
-```
-
-Check Cookie status. The raw Cookie is never returned:
-
-```bash
-curl "https://<codespace-name>-8000.app.github.dev/v1/auth/cookies/bilibili" \
-  -H "Authorization: Bearer replace-with-a-long-random-token"
-```
-
-Delete Cookie:
-
-```bash
-curl -X DELETE "https://<codespace-name>-8000.app.github.dev/v1/auth/cookies/bilibili" \
-  -H "Authorization: Bearer replace-with-a-long-random-token"
-```
-
-Local storage:
-
-```text
-.secrets/cookies.json
-```
-
-`.secrets/` is ignored by Git. Never commit Cookies.
-
----
-
-## API Reference
-
-### `GET /health`
-
-Returns:
-
-```json
 {
   "ok": true,
   "service": "video-analysis-api"
 }
 ```
 
-### `POST /v1/video/extract`
+```text
+📚 API 接口文档
+健康检查
+GET /health
+同步解析视频
+POST /v1/video/extract
+请求头：
 
-Request:
+Content-Type: application/json
+请求体：
 
-```json
 {
-  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "url": "https://www.bilibili.com/video/BVxxxxxx",
   "languages": ["zh-Hans", "zh-CN", "zh", "en"],
   "include_metadata": true,
-  "max_chars_per_chunk": 5000,
-  "include_keyframes": false,
-  "frame_interval": 6,
-  "grid_size": [2, 2]
+  "max_chars_per_chunk": 5000
 }
-```
+参数说明：
 
-Success response shape:
+参数	类型	说明
+url	string	YouTube 或 Bilibili 视频链接
+languages	array	字幕语言优先级
+include_metadata	boolean	返回标题、时长、作者等信息
+max_chars_per_chunk	number	单个文本分块最大字符数
+返回示例：
 
-```json
 {
   "ok": true,
-  "platform": "youtube",
-  "video_id": "VIDEO_ID",
-  "url": "https://www.youtube.com/watch?v=VIDEO_ID",
+  "platform": "bilibili",
+  "video_id": "BVxxxxxx",
   "metadata": {
-    "title": "Video title",
+    "title": "视频标题",
     "duration": 1234.5,
-    "uploader": "Channel",
-    "webpage_url": "https://www.youtube.com/watch?v=VIDEO_ID",
-    "thumbnail": "https://...",
-    "chapters": []
+    "uploader": "作者名称"
   },
   "transcript": {
-    "source": "youtube_transcript_api",
     "language": "zh-CN",
-    "is_generated": false,
+    "has_timeline": true,
     "segments": [
       {
         "index": 0,
         "start": 0.0,
         "end": 3.2,
-        "duration": 3.2,
         "timestamp": "00:00:00",
-        "text": "..."
+        "text": "第一句字幕"
       }
     ],
-    "plain_text": "...",
-    "timeline_text": "[00:00:00 - 00:00:03] ..."
+    "plain_text": "完整字幕文本",
+    "timeline_text": "[00:00:00 - 00:00:03] 第一句字幕"
   },
   "dify_payload": {
-    "timeline_text": "...",
-    "plain_text": "...",
-    "segments": [],
+    "timeline_text": "带时间轴的字幕文本",
+    "plain_text": "普通字幕文本",
     "chunks": []
   },
-  "warnings": [],
-  "error": null
+  "warnings": []
 }
 ```
-
-Failure responses keep HTTP `200` for Dify workflow branching:
-
-```json
-{
-  "ok": false,
-  "platform": "bilibili",
-  "url": "https://www.bilibili.com/video/BV...",
-  "transcript": null,
-  "dify_payload": {
-    "timeline_text": "",
-    "plain_text": "",
-    "segments": [],
-    "chunks": []
-  },
-  "warnings": ["No usable subtitle/timeline track found"],
-  "error": "NO_TRANSCRIPT"
-}
-```
-
-### `POST /v1/auth/cookies`
-
-Requires:
 
 ```text
-Authorization: Bearer <VIDEO_API_TOKEN>
+OpenAPI 文档
+GET /openapi.json
+完整地址示例：
+
+https://你的-codespace-名字-8000.app.github.dev/openapi.json
 ```
 
-Request:
+```text
+🔐 VIDEO_API_TOKEN 访问密码
+VIDEO_API_TOKEN 是这个 API 服务的访问密码。
 
-```json
-{
-  "platform": "bilibili",
-  "cookie": "SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"
-}
+Codespaces 端口设为 Public 后，设置 VIDEO_API_TOKEN 可以保护接口访问。
+
+启动服务前设置：
+
+export VIDEO_API_TOKEN="换成你自己的长密码"
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+请求接口时添加：
+
+Authorization: Bearer 换成你自己的长密码
+格式示例：
+
+Authorization: Bearer abc123456
 ```
 
-Response:
+```text
+🍪 Bilibili Cookie 登录态
+部分 Bilibili 视频的 AI 字幕需要登录态。浏览器登录 Bilibili 后可以看到字幕，API 读取字幕时也需要同一份登录态。
 
-```json
+可以把浏览器里的 Bilibili Cookie 保存到本服务中，让 API 使用登录态读取 AI 字幕。
+
+Cookie 属于个人登录凭证，请妥善保存。泄露后建议退出 Bilibili 登录或刷新登录态。
+
+网页端提取 Cookie
+推荐使用 Chrome 或 Edge 浏览器：
+
+打开 Bilibili 网页版
+登录自己的 Bilibili 账号
+打开需要解析的视频页面
+按 F12 打开开发者工具
+点击 Network 或 网络
+刷新页面
+在请求列表里点击一个 bilibili.com 或 api.bilibili.com 请求
+点击右侧的 Headers 或 标头
+找到 Request Headers 或 请求标头
+找到 Cookie
+复制 Cookie: 后面的完整内容
+复制出来的 Cookie 通常是一长串文本，中间包含很多用分号分隔的字段，例如：
+
+SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx
+写入 Bilibili Cookie
+使用前先设置 VIDEO_API_TOKEN。
+
+curl -X POST "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer 你的访问密码" \
+  -d '{
+    "platform": "bilibili",
+    "cookie": "SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"
+  }'
+示例里的 xxx 替换成浏览器复制出来的真实 Cookie 内容。
+
+查看 Cookie 状态
+curl "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies/bilibili" \
+  -H "Authorization: Bearer 你的访问密码"
+返回示例：
+
 {
   "ok": true,
   "platform": "bilibili",
@@ -482,12 +208,36 @@ Response:
   "required_keys_present": ["SESSDATA", "bili_jct", "DedeUserID"],
   "required_keys_missing": []
 }
+状态接口只返回配置情况，原始 Cookie 内容保存在服务端。
+
+删除 Cookie
+curl -X DELETE "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies/bilibili" \
+  -H "Authorization: Bearer 你的访问密码"
+Cookie 保存位置：
+
+.secrets/cookies.json
+.secrets/ 已经写入 .gitignore，用于保存本地私密配置。
 ```
 
-### `GET /openapi.json`
-
-FastAPI generates this automatically:
+```txet
+⚠️ 注意事项 & 限制
+当前版本聚焦字幕解析和时间轴整理
+支持平台：YouTube、Bilibili
+平台字幕可用性会影响解析结果
+Bilibili AI 字幕可能需要 Cookie 登录态
+YouTube 字幕读取可能受网络环境影响
+长视频建议使用 max_chars_per_chunk 控制分块大小
+Codespaces 免费资源适合课堂演示和轻量测试
+主要依赖：FastAPI、yt-dlp、youtube-transcript-api
+```
 
 ```text
-https://<codespace-name>-8000.app.github.dev/openapi.json
+🧾 接口列表
+方法	路径	用途
+GET	/health	检查服务状态
+POST	/v1/video/extract	解析视频字幕
+POST	/v1/auth/cookies	保存 Cookie
+GET	/v1/auth/cookies/bilibili	查看 Cookie 状态
+DELETE	/v1/auth/cookies/bilibili	删除 Cookie
+GET	/openapi.json	查看 OpenAPI 文档
 ```
