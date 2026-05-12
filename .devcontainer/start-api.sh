@@ -12,6 +12,15 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   PYTHON_BIN="python"
 fi
 
+ensure_dependencies() {
+  if "$PYTHON_BIN" -c "import uvicorn, fastapi, yt_dlp" >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "Python dependencies are missing. Installing requirements.txt..."
+  "$PYTHON_BIN" -m pip install -r requirements.txt
+}
+
 is_healthy() {
   curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1
 }
@@ -23,6 +32,8 @@ fi
 
 mkdir -p "$(dirname "$LOG_FILE")"
 : > "$LOG_FILE"
+
+ensure_dependencies
 
 echo "Starting Video Knowledge API on port ${PORT}..."
 nohup "$PYTHON_BIN" main.py >> "$LOG_FILE" 2>&1 &

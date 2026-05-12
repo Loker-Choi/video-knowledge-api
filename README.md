@@ -73,7 +73,7 @@ python main.py
 打开 Codespace 后，终端会显示服务状态。如果没有看到端口或 `/health` 访问失败，可以手动运行：
 
 ```bash
-python main.py
+bash .devcontainer/start-api.sh
 ```
 
 查看启动日志：
@@ -430,6 +430,7 @@ Content-Type: application/json
 | 错误 | 处理方式 |
 | --- | --- |
 | `/health` 访问失败 | 检查服务是否启动、端口是否 Public、URL 是否复制完整 |
+| `No module named 'uvicorn'` | 依赖还没有安装完成，运行 `pip install -r requirements.txt` 后再运行 `python main.py` |
 | `NO_TRANSCRIPT` | 视频没有可读取字幕，Bilibili 可先配置 Cookie，或开启 GLM-ASR |
 | `VALIDATION_ERROR` | 检查请求体字段类型，例如 `url` 必须是字符串 |
 | `REQUEST_TIMEOUT` | 视频处理时间过长，减少视觉解析参数或提高超时时间 |
