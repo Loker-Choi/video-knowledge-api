@@ -63,14 +63,14 @@ video-knowledge-api/
 6. 将 Visibility 改为 `Public`
 7. 复制形如 `https://你的-codespace-名字-8000.app.github.dev` 的公网地址
 
-Codespaces 会自动执行：
+Codespaces 会自动安装依赖，并在后台启动服务：
 
 ```bash
 pip install -r requirements.txt
 python main.py
 ```
 
-如果服务没有自动启动，可以手动运行：
+打开 Codespace 后，终端会显示服务状态。如果没有看到端口或 `/health` 访问失败，可以手动运行：
 
 ```bash
 python main.py

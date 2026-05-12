@@ -20,5 +20,6 @@
   "containerEnv": {
     "PYTHONUNBUFFERED": "1"
   },
-  "postStartCommand": "(nohup python main.py > /tmp/video-knowledge-api.log 2>&1 &)"
+  "postStartCommand": "bash .devcontainer/start-api.sh",
+  "postAttachCommand": "bash .devcontainer/show-api-status.sh"
 }
