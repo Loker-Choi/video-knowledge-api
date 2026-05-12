@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 import tempfile
 import urllib.request
 from typing import Any
@@ -13,6 +14,7 @@ from .models import ChapterInfo, MetadataInfo, TranscriptInfo, TranscriptSegment
 from .platforms import extract_youtube_video_id
 from .subtitles import parse_subtitle_text
 from .text_utils import normalize_text, seconds_to_timestamp, segments_to_plain_text, segments_to_timeline_text
+from config import get_settings
 
 
 class ExtractionError(RuntimeError):
@@ -73,17 +75,18 @@ def build_transcript(
 
 
 def ytdlp_options(platform: str | None = None) -> dict[str, Any]:
+    settings = get_settings()
     options: dict[str, Any] = {
         "quiet": True,
         "no_warnings": True,
         "skip_download": True,
         "noplaylist": True,
+        "socket_timeout": settings.yt_dlp_timeout_seconds,
     }
-    cookies_file = os.getenv("YTDLP_COOKIES_FILE")
-    if cookies_file:
-        options["cookiefile"] = cookies_file
+    if settings.ytdlp_cookies_file:
+        options["cookiefile"] = str(settings.ytdlp_cookies_file)
     elif platform:
-        cookie = CookieStore().get(platform)
+        cookie = CookieStore(settings.cookie_store_path).get(platform)
         if cookie:
             options["cookiefile"] = write_temp_cookiefile(platform, cookie)
     return options
@@ -277,7 +280,7 @@ def fetch_url_text(url: str) -> str:
         url,
         headers={"User-Agent": "Mozilla/5.0 video-analysis-api"},
     )
-    with urllib.request.urlopen(request, timeout=20) as response:
+    with urllib.request.urlopen(request, timeout=get_settings().http_timeout_seconds) as response:
         charset = response.headers.get_content_charset() or "utf-8"
         return response.read().decode(charset, errors="replace")
 
@@ -285,13 +288,14 @@ def fetch_url_text(url: str) -> str:
 def cleanup_temp_cookiefile(cookiefile: object) -> None:
     if not isinstance(cookiefile, str):
         return
-    temp_root = tempfile.gettempdir()
+    temp_root = Path(tempfile.gettempdir()).resolve()
     basename = os.path.basename(cookiefile)
-    if (
-        not cookiefile.startswith(temp_root)
-        or not basename.startswith("video-analysis-api-")
-        or not basename.endswith(".cookies.txt")
-    ):
+    resolved_cookiefile = Path(cookiefile).resolve()
+    try:
+        resolved_cookiefile.relative_to(temp_root)
+    except ValueError:
+        return
+    if not basename.startswith("video-analysis-api-") or not basename.endswith(".cookies.txt"):
         return
     try:
         os.remove(cookiefile)

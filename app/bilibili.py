@@ -5,6 +5,8 @@ import urllib.parse
 import urllib.request
 from typing import Any
 
+from config import get_settings
+
 from .extractors import TranscriptNotFound, build_transcript
 from .models import TranscriptInfo
 
@@ -113,7 +115,7 @@ def http_get_json(url: str, params: dict[str, object] | None = None, cookie: str
     if cookie:
         headers["Cookie"] = cookie
     request = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(request, timeout=20) as response:
+    with urllib.request.urlopen(request, timeout=get_settings().http_timeout_seconds) as response:
         charset = response.headers.get_content_charset() or "utf-8"
         payload = response.read().decode(charset, errors="replace")
     import json
@@ -124,4 +126,3 @@ def http_get_json(url: str, params: dict[str, object] | None = None, cookie: str
 
 def normalize_url(url: str) -> str:
     return f"https:{url}" if url.startswith("//") else url
-

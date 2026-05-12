@@ -14,7 +14,7 @@
 
 ## 🎬 项目简介
 
-Video Knowledge API 是一个基于 FastAPI 开发的轻量视频解析服务，用于把 YouTube 或 Bilibili 视频链接解析为结构化 JSON，返回视频元信息、时间轴字幕、纯文本字幕、分块文本，并可按需启用 GLM 音频转写和 GLM 视觉解析。
+Video Knowledge API 是一个基于 FastAPI 开发的轻量视频解析服务，可以把 YouTube 或 Bilibili 视频链接解析为结构化 JSON，返回视频元信息、时间轴字幕、纯文本字幕、分块文本，并可按需启用 GLM-ASR 音频转写和 GLM 视觉解析。
 
 项目参考并致谢：
 
@@ -23,30 +23,63 @@ Video Knowledge API 是一个基于 FastAPI 开发的轻量视频解析服务，
 - [youtube-transcript-api](https://github.com/jdepoix/youtube-transcript-api)：YouTube 字幕读取能力
 - [FastAPI](https://fastapi.tiangolo.com/)：API 服务和 OpenAPI 文档
 
-主要能力包括：优先读取平台已有字幕，支持 YouTube 人工字幕和自动生成字幕，支持 Bilibili 官方字幕和 AI 字幕，支持通过 Bilibili Cookie 获取需要登录态的 AI 字幕；平台字幕缺失时可以使用 GLM-ASR 做语音转文字，需要理解画面时可以下载视频、抽取静态帧、拼成网格图并交给 GLM 视觉模型分析。
+主要能力：
+
+- 优先读取平台已有字幕，保留时间轴信息
+- 支持 YouTube 人工字幕和自动生成字幕
+- 支持 Bilibili 官方字幕和 AI 字幕
+- 支持保存 Bilibili Cookie，用于读取需要登录态的 AI 字幕
+- 支持平台字幕缺失时用 GLM-ASR 做语音转文字
+- 支持下载低清视频、抽取静态帧、拼成网格图，并用 GLM 视觉模型理解画面
+- 支持同步接口返回 `ok / error / warnings / dify_payload`，便于工作流直接读取字段
+
+## 📁 项目结构
+
+```text
+video-knowledge-api/
+├── api/              # HTTP 路由
+├── app/              # 平台适配与基础能力
+├── config/           # 统一配置读取
+├── core/             # 应用创建和统一错误处理
+├── models/           # 数据结构导出
+├── services/         # 业务编排、Cookie、缓存、视觉解析
+├── static/           # 临时静态目录占位
+├── assets/           # README 图片
+├── .env.example      # 配置模板
+├── Dockerfile
+├── main.py           # 统一启动入口
+└── requirements.txt
+```
 
 ## 🚀 打开方式一：GitHub Codespaces
 
-推荐使用 GitHub Codespaces，适合课堂、演示和快速部署。
-
-在 GitHub 仓库页面：
+推荐使用 GitHub Codespaces。打开仓库页面后：
 
 1. 点击 `Code`
 2. 选择 `Codespaces`
 3. 点击 `Create codespace on main`
-4. 等待 Codespaces 打开
-5. 等待依赖安装完成
+4. 等待依赖安装完成
+5. 打开 `Ports` 面板，找到 `8000`
+6. 将 Visibility 改为 `Public`
+7. 复制形如 `https://你的-codespace-名字-8000.app.github.dev` 的公网地址
 
-服务通常会自动运行在 `8000` 端口。也可以在终端手动启动：
+Codespaces 会自动执行：
 
 ```bash
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+pip install -r requirements.txt
+python main.py
 ```
 
-在 Codespaces 的 `Ports` 面板中找到 `8000`，将 Visibility 改为 `Public`，复制公开地址：
+如果服务没有自动启动，可以手动运行：
 
-```text
-https://你的-codespace-名字-8000.app.github.dev
+```bash
+python main.py
+```
+
+查看启动日志：
+
+```bash
+tail -f /tmp/video-knowledge-api.log
 ```
 
 健康检查：
@@ -60,38 +93,101 @@ curl https://你的-codespace-名字-8000.app.github.dev/health
 ```json
 {
   "ok": true,
-  "service": "video-analysis-api"
+  "service": "video-knowledge-api",
+  "version": "0.2.0",
+  "ffmpeg": true,
+  "glm_configured": false,
+  "bilibili_cookie_configured": false
 }
 ```
 
-## 🐳 打开方式二：Docker
+在线接口文档：
 
-Docker 适合有经验的开发者。示例命令如下：
+```text
+https://你的-codespace-名字-8000.app.github.dev/docs
+```
+
+## 💻 打开方式二：本地 Python
+
+准备 Python 3.12，并确认已经安装 `ffmpeg`：
+
+```bash
+ffmpeg -version
+```
+
+安装依赖并启动：
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env
+python main.py
+```
+
+macOS / Linux 可以把激活命令换成：
+
+```bash
+source .venv/bin/activate
+cp .env.example .env
+python main.py
+```
+
+启动后访问：
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+## 🐳 打开方式三：Docker
+
+Docker 适合有经验的开发者：
 
 ```bash
 docker build -t video-knowledge-api .
-docker run --rm -p 8000:8000 \
-  -e GLM_API_KEY="你的智谱 API Key" \
-  video-knowledge-api
+docker run --rm -p 8000:8000 --env-file .env video-knowledge-api
 ```
 
-容器内需要可用的 `ffmpeg`，用于音频切分和关键帧抽取。
+## ⚙️ 配置说明
 
-## 📚 字幕解析
+复制配置模板：
 
-核心接口：
+```bash
+copy .env.example .env
+```
+
+常用配置：
+
+| 配置 | 说明 |
+| --- | --- |
+| `PORT` | 服务端口，默认 `8000` |
+| `CORS_ALLOW_ORIGINS` | 浏览器跨域来源，默认 `*` |
+| `REQUEST_TIMEOUT_SECONDS` | 单次同步请求最大等待时间 |
+| `MAX_CONCURRENT_TASKS` | 同时处理的视频任务数量 |
+| `COOKIE_STORE_PATH` | Bilibili Cookie 保存位置 |
+| `CACHE_ROOT` | 音频、视频、关键帧临时缓存目录 |
+| `KEEP_CACHE` | 调试时保留缓存文件，默认 `false` |
+| `GLM_API_KEY` | 开启 GLM-ASR 或视觉解析时需要 |
+| `YTDLP_COOKIES_FILE` | 进阶用法，指定 Netscape 格式 Cookie 文件 |
+
+`.env`、`.secrets/`、`.cache/`、`*.cookies.txt` 已写入 `.gitignore`。
+
+## 📚 字幕解析接口
+
+推荐使用同步接口：
+
+```http
+POST /api/generate_note
+```
+
+兼容接口：
 
 ```http
 POST /v1/video/extract
+POST /v1/video/generate_note
 ```
 
-请求头：
-
-```http
-Content-Type: application/json
-```
-
-请求体：
+基础请求：
 
 ```json
 {
@@ -102,26 +198,66 @@ Content-Type: application/json
 }
 ```
 
-参数说明：
+常用参数：
 
-| 参数 | 类型 | 说明 |
-| --- | --- | --- |
-| `url` | string | YouTube 或 Bilibili 视频链接 |
-| `languages` | array | 字幕语言优先级 |
-| `include_metadata` | boolean | 返回标题、时长、作者等信息 |
-| `max_chars_per_chunk` | number | 单个文本分块最大字符数 |
+| 参数 | 说明 |
+| --- | --- |
+| `url` | YouTube 或 Bilibili 视频链接 |
+| `languages` | 字幕语言优先级 |
+| `include_metadata` | 返回标题、时长、作者等信息 |
+| `max_chars_per_chunk` | 单个文本分块最大字符数 |
+| `fallback_to_glm_stt` | 没有平台字幕时启用 GLM-ASR |
+| `include_visual_analysis` | 启用 GLM 视觉解析 |
+| `include_keyframes` | 只抽取关键帧和拼图，不调用视觉模型 |
+| `frame_interval` | 每隔多少秒抽取一帧，默认 `6` |
+| `grid_size` | 拼图布局，默认 `[2, 2]` |
+| `max_keyframes` | 最多抽取多少帧，默认 `16` |
 
-返回内容包括 `metadata`、`transcript.segments`、`transcript.plain_text`、`transcript.timeline_text` 和分块文本等字段，后续应用可以按结构化字段继续处理视频内容。
+成功响应会包含：
+
+```json
+{
+  "ok": true,
+  "platform": "bilibili",
+  "metadata": {},
+  "transcript": {},
+  "visual_analysis": null,
+  "dify_payload": {
+    "title": "视频标题",
+    "timeline_text": "[00:00:00 - 00:00:03] 字幕文本",
+    "plain_text": "完整字幕文本",
+    "chunks": [],
+    "visual_summary": ""
+  },
+  "warnings": []
+}
+```
+
+失败响应也会返回 HTTP 200，方便工作流继续处理：
+
+```json
+{
+  "ok": false,
+  "platform": "bilibili",
+  "error": "NO_TRANSCRIPT",
+  "warnings": ["No usable subtitle/timeline track found."],
+  "dify_payload": {
+    "timeline_text": "",
+    "plain_text": "",
+    "chunks": []
+  }
+}
+```
 
 ## 🎞️ YouTube 字幕读取
 
-YouTube 字幕优先使用 `youtube-transcript-api` 读取，会按 `languages` 设置的语言优先级查找字幕，优先读取人工字幕；人工字幕缺失时读取 YouTube 自动生成字幕，`youtube-transcript-api` 失败时再使用 `yt-dlp` 尝试读取字幕轨道和自动字幕轨道。
+YouTube 字幕优先使用 `youtube-transcript-api`，会按 `languages` 顺序查找字幕，先读人工字幕，再读自动生成字幕；如果读取失败，会再使用 `yt-dlp` 尝试读取字幕轨道和自动字幕轨道。
 
 YouTube 字幕读取主要受视频字幕可用性和网络环境影响。
 
 ## 🍪 Bilibili 字幕与登录态
 
-Bilibili 字幕优先通过官方接口读取，优先读取官方字幕和 AI 字幕；字幕需要登录态时，服务会使用已配置的 Bilibili Cookie，官方接口失败时再使用 `yt-dlp` 尝试读取字幕轨道。
+Bilibili 字幕优先通过官方接口读取，优先读取官方字幕和 AI 字幕；字幕需要登录态时，服务会使用已保存的 Bilibili Cookie，官方接口失败时再使用 `yt-dlp` 尝试读取字幕轨道。
 
 Bilibili AI 字幕需要 Cookie 登录态。浏览器登录 Bilibili 后可以看到字幕，API 读取字幕时也需要同一份登录态。
 
@@ -146,7 +282,7 @@ Bilibili AI 字幕需要 Cookie 登录态。浏览器登录 Bilibili 后可以�
   <img src="assets/bilibili-cookie.png" alt="Bilibili Cookie 提取示意图" width="900" />
 </p>
 
-复制出来的 Cookie 通常是一长串文本，中间包含很多用分号分隔的字段，例如：
+Cookie 通常包含：
 
 ```text
 SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx
@@ -165,33 +301,38 @@ curl -X POST "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookie
   }'
 ```
 
+PowerShell 示例：
+
+```powershell
+Invoke-RestMethod `
+  -Method Post `
+  -Uri "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies" `
+  -ContentType "application/json" `
+  -Body '{"platform":"bilibili","cookie":"SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"}'
+```
+
 查看 Cookie 状态：
 
 ```bash
 curl "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies/bilibili"
 ```
 
-删除 Cookie：
+如果 `required_keys_missing` 是空数组，说明关键字段已经齐全。
 
-```bash
-curl -X DELETE "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies/bilibili"
-```
+## 🧠 GLM-ASR 与视觉解析
 
-Cookie 保存位置：
-
-```text
-.secrets/cookies.json
-```
-
-`.secrets/` 已写入 `.gitignore`。
-
-## 🧠 GLM 音频转写与视觉解析
-
-平台字幕缺失时，可以启用 GLM-ASR 做语音转文字；需要理解视频画面时，可以启用 GLM 视觉解析。使用这些能力前需要在运行环境中设置 `GLM_API_KEY`。
+只读取平台字幕时，不需要 `GLM_API_KEY`。启用 GLM-ASR 或视觉解析前，需要在运行环境中配置：
 
 ```bash
 export GLM_API_KEY="换成你的智谱 API Key"
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+python main.py
+```
+
+PowerShell：
+
+```powershell
+$env:GLM_API_KEY="换成你的智谱 API Key"
+python main.py
 ```
 
 <p align="center">
@@ -206,11 +347,6 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
   "fallback_to_glm_stt": true
 }
 ```
-
-GLM-ASR 会先下载音频，再按模型限制切成短片段。默认参数：
-
-- `stt_segment_seconds`: 25
-- `stt_max_segment_mb`: 20
 
 启用视觉解析：
 
@@ -233,23 +369,49 @@ yt-dlp 下载低清视频
 -> GLM 视觉模型分析拼图
 ```
 
-只抽帧和拼图：
+## 🔗 Dify 接入
+
+1. 在 Codespaces 启动服务，并把 `8000` 端口设为 `Public`
+2. 复制公网地址，例如 `https://xxx-8000.app.github.dev`
+3. 在 Dify Workflow 或 Chatflow 中添加 HTTP Request 节点
+4. Method 选择 `POST`
+5. URL 填：
+
+```text
+https://xxx-8000.app.github.dev/api/generate_note
+```
+
+6. Header 填：
+
+```http
+Content-Type: application/json
+```
+
+7. Body 填：
 
 ```json
 {
-  "url": "https://www.bilibili.com/video/BVxxxxxx",
-  "include_keyframes": true,
-  "frame_interval": 6,
-  "grid_size": [2, 2],
-  "max_keyframes": 16
+  "url": "{{video_url}}",
+  "languages": ["zh-Hans", "zh-CN", "zh", "en"],
+  "include_metadata": true,
+  "max_chars_per_chunk": 5000
 }
 ```
 
-临时音频、视频、静态帧和拼图文件保存在：
+后续节点优先读取：
 
-```text
-.cache/video-knowledge-api/
-```
+| 字段 | 用途 |
+| --- | --- |
+| `ok` | 判断是否解析成功 |
+| `error` | 失败原因 |
+| `warnings` | 调试提示 |
+| `dify_payload.title` | 视频标题 |
+| `dify_payload.timeline_text` | 带时间轴字幕 |
+| `dify_payload.plain_text` | 纯文本字幕 |
+| `dify_payload.chunks` | 长视频分块文本 |
+| `dify_payload.visual_summary` | 视觉解析摘要 |
+
+长视频建议优先使用 `dify_payload.chunks` 分块处理，再合并每段结果。
 
 ## ⚠️ 注意事项 & 限制
 
@@ -258,17 +420,36 @@ yt-dlp 下载低清视频
 - Bilibili AI 字幕需要 Cookie 登录态
 - 平台字幕可用性会影响解析结果
 - GLM-ASR 和 GLM 视觉解析需要设置 `GLM_API_KEY`
+- 视觉解析会下载低清视频并调用 GLM 视觉模型，耗时和额度消耗高于字幕读取
+- 默认单次同步请求最长等待 `REQUEST_TIMEOUT_SECONDS` 秒
+- 默认同时处理 `MAX_CONCURRENT_TASKS` 个视频任务
+- 临时缓存默认自动清理，调试时可设置 `KEEP_CACHE=true`
+
+## 🛠️ 常见错误
+
+| 错误 | 处理方式 |
+| --- | --- |
+| `/health` 访问失败 | 检查服务是否启动、端口是否 Public、URL 是否复制完整 |
+| `NO_TRANSCRIPT` | 视频没有可读取字幕，Bilibili 可先配置 Cookie，或开启 GLM-ASR |
+| `VALIDATION_ERROR` | 检查请求体字段类型，例如 `url` 必须是字符串 |
+| `REQUEST_TIMEOUT` | 视频处理时间过长，减少视觉解析参数或提高超时时间 |
+| `SERVER_BUSY` | 当前服务正在处理其他视频，稍后重试 |
+| `GLM STT fallback failed` | 检查 `GLM_API_KEY` 是否配置正确 |
+| `ffmpeg is required` | 安装 ffmpeg 后重新启动服务 |
 
 ## 🧾 接口列表
 
 | 方法 | 路径 | 用途 |
 | --- | --- | --- |
 | `GET` | `/health` | 检查服务状态 |
-| `POST` | `/v1/video/extract` | 解析视频 |
+| `POST` | `/api/generate_note` | 同步解析视频 |
+| `POST` | `/v1/video/extract` | 同步解析视频，兼容接口 |
+| `POST` | `/v1/video/generate_note` | 同步解析视频，兼容接口 |
 | `POST` | `/v1/auth/cookies` | 保存 Cookie |
 | `GET` | `/v1/auth/cookies/bilibili` | 查看 Cookie 状态 |
 | `DELETE` | `/v1/auth/cookies/bilibili` | 删除 Cookie |
-| `GET` | `/openapi.json` | 查看 OpenAPI 文档 |
+| `GET` | `/docs` | Swagger UI |
+| `GET` | `/openapi.json` | OpenAPI 文档 |
 
 ## 📄 License
 

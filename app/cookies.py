@@ -87,7 +87,7 @@ def parse_cookie_keys(cookie: str) -> set[str]:
 
 def cookie_to_netscape_lines(platform: str, cookie: str) -> list[str]:
     domain = ".bilibili.com" if platform == "bilibili" else ".youtube.com"
-    secure = "FALSE"
+    secure = "TRUE"
     lines = ["# Netscape HTTP Cookie File\n"]
     for pair in cookie.split(";"):
         if "=" not in pair:

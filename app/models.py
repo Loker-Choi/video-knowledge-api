@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 DEFAULT_LANGUAGES = ["zh-Hans", "zh-CN", "zh", "en"]
@@ -29,6 +29,15 @@ class ExtractRequest(BaseModel):
     glm_stt_model: str = Field(default="glm-asr")
     glm_vision_model: str = Field(default="glm-4.5v")
     visual_prompt: str = Field(default="请按时间顺序概括这些视频关键帧中的主要画面、文字和事件。")
+
+    @field_validator("grid_size")
+    @classmethod
+    def validate_grid_size(cls, value: list[int]) -> list[int]:
+        if len(value) != 2 or any(item <= 0 for item in value):
+            raise ValueError("grid_size must contain two positive integers")
+        if value[0] * value[1] > 9:
+            raise ValueError("grid_size can contain at most 9 frames per grid")
+        return value
 
 
 class CookieUpdateRequest(BaseModel):

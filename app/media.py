@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -14,6 +13,7 @@ from .cookies import CookieStore, write_temp_cookiefile
 from .extractors import cleanup_temp_cookiefile
 from .models import FrameGridInfo, KeyframeInfo
 from .text_utils import seconds_to_timestamp
+from config import get_settings
 
 
 class MediaError(RuntimeError):
@@ -34,6 +34,7 @@ def cache_dir_for_url(url: str, platform: str, root: str | Path = ".cache/video-
 
 def download_media(url: str, platform: str, output_dir: Path, *, media_type: str) -> Path:
     ensure_ffmpeg()
+    settings = get_settings()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     if media_type == "audio":
@@ -65,11 +66,12 @@ def download_media(url: str, platform: str, output_dir: Path, *, media_type: str
     else:
         raise MediaError(f"Unsupported media_type: {media_type}")
 
-    cookies_file = os.getenv("YTDLP_COOKIES_FILE")
-    if cookies_file:
-        options["cookiefile"] = cookies_file
+    options["socket_timeout"] = settings.yt_dlp_timeout_seconds
+
+    if settings.ytdlp_cookies_file:
+        options["cookiefile"] = str(settings.ytdlp_cookies_file)
     else:
-        cookie = CookieStore().get(platform)
+        cookie = CookieStore(settings.cookie_store_path).get(platform)
         if cookie:
             options["cookiefile"] = write_temp_cookiefile(platform, cookie)
 
@@ -250,7 +252,7 @@ def compose_grid_image(
 
 
 def run_command(command: list[str]) -> None:
-    process = subprocess.run(command, capture_output=True, text=True, check=False)
+    process = subprocess.run(command, capture_output=True, text=True, check=False, timeout=get_settings().yt_dlp_timeout_seconds)
     if process.returncode != 0:
         stderr = (process.stderr or process.stdout or "").strip()
         raise MediaError(stderr or f"Command failed: {' '.join(command)}")

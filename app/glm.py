@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import base64
 import mimetypes
-import os
 from pathlib import Path
 from typing import Any
 
 from .extractors import build_transcript
 from .media import split_audio
 from .models import FrameGridInfo, TranscriptInfo, VisualAnalysisInfo
+from config import get_settings
 
 
 class GlmError(RuntimeError):
@@ -16,7 +16,8 @@ class GlmError(RuntimeError):
 
 
 def glm_client() -> Any:
-    api_key = os.getenv("GLM_API_KEY") or os.getenv("ZHIPUAI_API_KEY")
+    settings = get_settings()
+    api_key = settings.glm_api_key or settings.zhipuai_api_key
     if not api_key:
         raise GlmError("Set GLM_API_KEY before using GLM STT or visual analysis")
     try:

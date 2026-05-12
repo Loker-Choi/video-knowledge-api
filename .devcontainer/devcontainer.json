@@ -20,5 +20,5 @@
   "containerEnv": {
     "PYTHONUNBUFFERED": "1"
   },
-  "postStartCommand": "(nohup python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > /tmp/video-knowledge-api.log 2>&1 &)"
+  "postStartCommand": "(nohup python main.py > /tmp/video-knowledge-api.log 2>&1 &)"
 }

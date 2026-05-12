@@ -1,5 +1,8 @@
 .secrets/
 .cache/
+cookies/
+static/*
+!static/.gitkeep
 .venv/
 __pycache__/
 .pytest_cache/
@@ -8,4 +11,10 @@ __pycache__/
 .coverage
 htmlcov/
 .env
+.env.*
+!.env.example
 *.log
+*.cookies.txt
+cookies.txt
+bilibili.cookies.txt
+youtube.cookies.txt

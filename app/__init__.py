@@ -1,2 +1,1 @@
-"""Lightweight Bilibili/YouTube transcript API for Dify."""
-
+"""Lightweight Bilibili/YouTube transcript and video analysis API."""
