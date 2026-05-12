@@ -16,7 +16,7 @@ if curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1; then
 else
   echo "Service is not running yet."
   echo "Start it manually with:"
-  echo "  python main.py"
+  echo "  bash .devcontainer/start-api.sh"
 fi
 
 echo ""

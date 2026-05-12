@@ -20,6 +20,6 @@
   "containerEnv": {
     "PYTHONUNBUFFERED": "1"
   },
-  "postStartCommand": "bash .devcontainer/start-api.sh",
-  "postAttachCommand": "bash .devcontainer/show-api-status.sh"
+  "postStartCommand": "bash ${containerWorkspaceFolder}/.devcontainer/start-api.sh",
+  "postAttachCommand": "bash ${containerWorkspaceFolder}/.devcontainer/start-api.sh; bash ${containerWorkspaceFolder}/.devcontainer/show-api-status.sh"
 }
