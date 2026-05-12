@@ -143,7 +143,7 @@ Bilibili AI 字幕需要 Cookie 登录态。浏览器登录 Bilibili 后可以�
 12. 复制 `Cookie:` 后面的完整内容
 
 <p align="center">
-  <img src="docs/images/bilibili-cookie.png" alt="Bilibili Cookie 提取示意图" width="900" />
+  <img src="assets/bilibili-cookie.png" alt="Bilibili Cookie 提取示意图" width="900" />
 </p>
 
 复制出来的 Cookie 通常是一长串文本，中间包含很多用分号分隔的字段，例如：
@@ -195,7 +195,7 @@ python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
 <p align="center">
-  <img src="docs/images/glm-api-key.png" alt="GLM API Key 配置示意图" width="900" />
+  <img src="assets/glm-api-key.png" alt="GLM API Key 配置示意图" width="900" />
 </p>
 
 启用 GLM-ASR：
