@@ -209,7 +209,7 @@ POST /v1/video/generate_note
 | `fallback_to_glm_stt` | 没有平台字幕时启用 GLM-ASR |
 | `include_visual_analysis` | 启用 GLM 视觉解析 |
 | `include_keyframes` | 只抽取关键帧和拼图，不调用视觉模型 |
-| `frame_interval` | 每隔多少秒抽取一帧，默认 `6` |
+| `frame_interval` | 每隔多少秒抽取一帧，默认 `6`，长视频可调大以减少 GLM 调用 |
 | `grid_size` | 拼图布局，默认 `[2, 2]` |
 | `max_keyframes` | 最多抽取多少帧，默认 `16` |
 

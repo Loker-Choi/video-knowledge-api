@@ -51,28 +51,30 @@ def fetch_visual_analysis(
             grid_size=payload.grid_size,
         )
 
-        if not payload.include_visual_analysis:
-            return sanitize_visual_paths(
-                VisualAnalysisInfo(
-                    source="keyframes",
-                    model=None,
-                    frame_interval=payload.frame_interval,
-                    grid_size=payload.grid_size,
-                    keyframes=keyframes,
-                    frame_grids=frame_grids,
-                    summary="",
-                )
-            )
+        keyframe_result = VisualAnalysisInfo(
+            source="keyframes",
+            model=None,
+            frame_interval=payload.frame_interval,
+            grid_size=payload.grid_size,
+            keyframes=keyframes,
+            frame_grids=frame_grids,
+            summary="",
+        )
 
-        return sanitize_visual_paths(
-            analyze_frame_grids_with_glm(
+        if not payload.include_visual_analysis:
+            return sanitize_visual_paths(keyframe_result)
+
+        try:
+            return sanitize_visual_paths(analyze_frame_grids_with_glm(
                 frame_grids,
                 model=payload.glm_vision_model,
                 prompt=payload.visual_prompt,
                 frame_interval=payload.frame_interval,
                 grid_size=payload.grid_size,
-            )
-        )
+            ))
+        except Exception as exc:
+            warnings.append(f"GLM visual analysis failed: {exc}")
+            return sanitize_visual_paths(keyframe_result)
     finally:
         cleanup_workdir(workdir)
 
