@@ -18,10 +18,17 @@ class ExtractRequest(BaseModel):
     max_chars_per_chunk: int = Field(default=5000, ge=500, le=20000)
     preserve_formatting: bool = Field(default=False)
 
-    # Reserved v2 knobs, kept in the API so Dify workflows do not need redesign later.
+    fallback_to_glm_stt: bool = Field(default=False)
+    include_visual_analysis: bool = Field(default=False)
     include_keyframes: bool = Field(default=False)
     frame_interval: int = Field(default=6, ge=1, le=30)
     grid_size: list[int] = Field(default_factory=lambda: [2, 2], min_length=2, max_length=2)
+    max_keyframes: int = Field(default=16, ge=1, le=64)
+    stt_segment_seconds: int = Field(default=25, ge=5, le=30)
+    stt_max_segment_mb: int = Field(default=20, ge=1, le=25)
+    glm_stt_model: str = Field(default="glm-asr")
+    glm_vision_model: str = Field(default="glm-4.5v")
+    visual_prompt: str = Field(default="请按时间顺序概括这些视频关键帧中的主要画面、文字和事件。")
 
 
 class CookieUpdateRequest(BaseModel):
@@ -72,6 +79,34 @@ class TextChunk(BaseModel):
     text: str
 
 
+class KeyframeInfo(BaseModel):
+    index: int
+    timestamp: float
+    timestamp_text: str
+    path: str | None = None
+    image_base64: str | None = None
+
+
+class FrameGridInfo(BaseModel):
+    index: int
+    start: float | None = None
+    end: float | None = None
+    timestamp_text: str
+    path: str | None = None
+    keyframes: list[KeyframeInfo] = Field(default_factory=list)
+    image_base64: str | None = None
+
+
+class VisualAnalysisInfo(BaseModel):
+    source: str = "glm_vision"
+    model: str | None = None
+    frame_interval: int
+    grid_size: list[int] = Field(default_factory=list)
+    keyframes: list[KeyframeInfo] = Field(default_factory=list)
+    frame_grids: list[FrameGridInfo] = Field(default_factory=list)
+    summary: str = ""
+
+
 class ExtractResponse(BaseModel):
     ok: bool
     platform: str
@@ -79,6 +114,7 @@ class ExtractResponse(BaseModel):
     url: str
     metadata: MetadataInfo | None = None
     transcript: TranscriptInfo | None = None
+    visual_analysis: VisualAnalysisInfo | None = None
     dify_payload: dict[str, Any] = Field(default_factory=dict)
     warnings: list[str] = Field(default_factory=list)
     error: str | None = None

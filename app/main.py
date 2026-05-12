@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import os
-from typing import Annotated
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 
 from .bilibili import fetch_bilibili_player_transcript
@@ -16,7 +15,17 @@ from .extractors import (
     fetch_ytdlp_subtitle_transcript,
     metadata_from_ytdlp,
 )
-from .models import DEFAULT_LANGUAGES, CookieUpdateRequest, ExtractRequest, ExtractResponse, MetadataInfo, TranscriptInfo
+from .glm import analyze_frame_grids_with_glm, transcribe_audio_with_glm
+from .media import build_frame_grids, cache_dir_for_url, download_media, extract_keyframes
+from .models import (
+    DEFAULT_LANGUAGES,
+    CookieUpdateRequest,
+    ExtractRequest,
+    ExtractResponse,
+    MetadataInfo,
+    TranscriptInfo,
+    VisualAnalysisInfo,
+)
 from .platforms import Platform, detect_platform
 from .text_utils import chunk_segments
 
@@ -36,26 +45,12 @@ app.add_middleware(
 )
 
 
-def require_token(authorization: Annotated[str | None, Header()] = None) -> None:
-    expected = os.getenv("VIDEO_API_TOKEN")
-    if not expected:
-        return
-    if authorization != f"Bearer {expected}":
-        raise HTTPException(status_code=401, detail="Missing or invalid bearer token")
-
-
-def require_configured_token(authorization: Annotated[str | None, Header()] = None) -> None:
-    if not os.getenv("VIDEO_API_TOKEN"):
-        raise HTTPException(status_code=403, detail="Set VIDEO_API_TOKEN before using cookie management APIs")
-    require_token(authorization)
-
-
 @app.get("/health")
 def health() -> dict[str, bool | str]:
     return {"ok": True, "service": "video-analysis-api"}
 
 
-@app.get("/v1/auth/cookies/{platform}", dependencies=[Depends(require_configured_token)])
+@app.get("/v1/auth/cookies/{platform}")
 def get_cookie_status(platform: str) -> dict[str, object]:
     try:
         return {"ok": True, **CookieStore().status(platform)}
@@ -63,7 +58,7 @@ def get_cookie_status(platform: str) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.post("/v1/auth/cookies", dependencies=[Depends(require_configured_token)])
+@app.post("/v1/auth/cookies")
 def update_cookie(payload: CookieUpdateRequest) -> dict[str, object]:
     try:
         CookieStore().set(payload.platform, payload.cookie)
@@ -72,7 +67,7 @@ def update_cookie(payload: CookieUpdateRequest) -> dict[str, object]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
-@app.delete("/v1/auth/cookies/{platform}", dependencies=[Depends(require_configured_token)])
+@app.delete("/v1/auth/cookies/{platform}")
 def delete_cookie(platform: str) -> dict[str, object]:
     if platform not in SUPPORTED_COOKIE_PLATFORMS:
         raise HTTPException(status_code=400, detail=f"Unsupported cookie platform: {platform}")
@@ -80,12 +75,12 @@ def delete_cookie(platform: str) -> dict[str, object]:
     return {"ok": True, **CookieStore().status(platform)}
 
 
-@app.post("/v1/video/extract", response_model=ExtractResponse, dependencies=[Depends(require_token)])
+@app.post("/v1/video/extract", response_model=ExtractResponse)
 def extract_video(payload: ExtractRequest) -> ExtractResponse:
     return extract_video_payload(payload)
 
 
-@app.get("/v1/video/extract", response_model=ExtractResponse, dependencies=[Depends(require_token)])
+@app.get("/v1/video/extract", response_model=ExtractResponse)
 def extract_video_get(
     url: str = Query(..., description="Bilibili or YouTube video URL."),
     languages: str = Query(
@@ -112,10 +107,8 @@ def extract_video_payload(payload: ExtractRequest) -> ExtractResponse:
     warnings: list[str] = []
     transcript: TranscriptInfo | None = None
     metadata: MetadataInfo | None = None
+    visual_analysis: VisualAnalysisInfo | None = None
     video_id: str | None = None
-
-    if payload.include_keyframes:
-        warnings.append("include_keyframes is reserved for v2 and ignored in v1.")
 
     if platform == Platform.UNKNOWN:
         return failure_response(
@@ -126,19 +119,23 @@ def extract_video_payload(payload: ExtractRequest) -> ExtractResponse:
         )
 
     try:
+        if payload.include_metadata or payload.include_visual_analysis or payload.include_keyframes:
+            metadata = try_fetch_metadata(url, warnings, platform.value)
+
         if platform == Platform.YOUTUBE:
             video_id, transcript = fetch_youtube_transcript(
                 url=url,
                 languages=payload.languages,
                 preserve_formatting=payload.preserve_formatting,
             )
-            if payload.include_metadata:
+            if payload.include_metadata and metadata is None:
                 metadata = try_fetch_metadata(url, warnings, platform.value)
         else:
             cookie = CookieStore().get("bilibili")
             try:
                 video_id, transcript = fetch_bilibili_player_transcript(url, cookie)
-                metadata = try_fetch_metadata(url, warnings, platform.value) if payload.include_metadata else None
+                if payload.include_metadata and metadata is None:
+                    metadata = try_fetch_metadata(url, warnings, platform.value)
                 warnings.append("Used Bilibili player API subtitle track.")
             except TranscriptNotFound as player_exc:
                 warnings.append(str(player_exc))
@@ -160,16 +157,27 @@ def extract_video_payload(payload: ExtractRequest) -> ExtractResponse:
                 warnings.append(f"yt-dlp subtitle fallback failed: {fallback_exc}")
 
         if transcript is None:
-            if payload.include_metadata and metadata is None:
+            if metadata is None:
                 metadata = try_fetch_metadata(url, warnings, platform.value)
-            return failure_response(
-                platform=platform.value,
-                url=url,
-                video_id=video_id,
-                metadata=metadata,
-                error="NO_TRANSCRIPT",
-                warnings=warnings or ["No usable subtitle/timeline track found."],
-            )
+
+            if payload.fallback_to_glm_stt:
+                try:
+                    transcript = fetch_glm_stt_transcript(url, platform.value, payload, warnings)
+                    warnings.append("Used GLM-ASR because no usable platform subtitle was found.")
+                except Exception as stt_exc:
+                    warnings.append(f"GLM STT fallback failed: {stt_exc}")
+
+            if transcript is None and not (payload.include_visual_analysis or payload.include_keyframes):
+                return failure_response(
+                    platform=platform.value,
+                    url=url,
+                    video_id=video_id,
+                    metadata=metadata,
+                    error="NO_TRANSCRIPT",
+                    warnings=warnings or ["No usable subtitle/timeline track found."],
+                )
+            if transcript is None:
+                warnings.append("No transcript was found; continuing with visual extraction.")
     except ExtractionError as exc:
         return failure_response(
             platform=platform.value,
@@ -185,6 +193,12 @@ def extract_video_payload(payload: ExtractRequest) -> ExtractResponse:
             warnings=warnings,
         )
 
+    if payload.include_visual_analysis or payload.include_keyframes:
+        try:
+            visual_analysis = fetch_visual_analysis(url, platform.value, payload, warnings)
+        except Exception as visual_exc:
+            warnings.append(f"Visual analysis failed: {visual_exc}")
+
     return ExtractResponse(
         ok=True,
         platform=platform.value,
@@ -192,12 +206,14 @@ def extract_video_payload(payload: ExtractRequest) -> ExtractResponse:
         url=url,
         metadata=metadata,
         transcript=transcript,
+        visual_analysis=visual_analysis,
         dify_payload=build_dify_payload(
             url=url,
             platform=platform.value,
             video_id=video_id,
             transcript=transcript,
             metadata=metadata,
+            visual_analysis=visual_analysis,
             max_chars_per_chunk=payload.max_chars_per_chunk,
         ),
         warnings=warnings,
@@ -210,6 +226,64 @@ def try_fetch_metadata(url: str, warnings: list[str], platform: str | None = Non
     except Exception as exc:
         warnings.append(f"Metadata fetch failed: {exc}")
         return None
+
+
+def fetch_glm_stt_transcript(
+    url: str,
+    platform: str,
+    payload: ExtractRequest,
+    warnings: list[str],
+) -> TranscriptInfo:
+    workdir = cache_dir_for_url(url, platform) / "stt"
+    audio_path = download_media(url, platform, workdir, media_type="audio")
+    warnings.append(f"Downloaded audio for GLM STT: {audio_path}")
+    return transcribe_audio_with_glm(
+        audio_path,
+        model=payload.glm_stt_model,
+        segment_seconds=payload.stt_segment_seconds,
+        max_segment_mb=payload.stt_max_segment_mb,
+    )
+
+
+def fetch_visual_analysis(
+    url: str,
+    platform: str,
+    payload: ExtractRequest,
+    warnings: list[str],
+) -> VisualAnalysisInfo:
+    workdir = cache_dir_for_url(url, platform) / "visual"
+    video_path = download_media(url, platform, workdir, media_type="video")
+    warnings.append(f"Downloaded video for keyframe extraction: {video_path}")
+    keyframes = extract_keyframes(
+        video_path,
+        workdir / "frames",
+        frame_interval=payload.frame_interval,
+        max_keyframes=payload.max_keyframes,
+    )
+    frame_grids = build_frame_grids(
+        keyframes,
+        workdir / "grids",
+        grid_size=payload.grid_size,
+    )
+
+    if not payload.include_visual_analysis:
+        return VisualAnalysisInfo(
+            source="keyframes",
+            model=None,
+            frame_interval=payload.frame_interval,
+            grid_size=payload.grid_size,
+            keyframes=keyframes,
+            frame_grids=frame_grids,
+            summary="",
+        )
+
+    return analyze_frame_grids_with_glm(
+        frame_grids,
+        model=payload.glm_vision_model,
+        prompt=payload.visual_prompt,
+        frame_interval=payload.frame_interval,
+        grid_size=payload.grid_size,
+    )
 
 
 def failure_response(
@@ -234,6 +308,7 @@ def failure_response(
             video_id=video_id,
             transcript=None,
             metadata=metadata,
+            visual_analysis=None,
             max_chars_per_chunk=5000,
         ),
         warnings=warnings,
@@ -248,6 +323,7 @@ def build_dify_payload(
     video_id: str | None,
     transcript: TranscriptInfo | None,
     metadata: MetadataInfo | None,
+    visual_analysis: VisualAnalysisInfo | None,
     max_chars_per_chunk: int,
 ) -> dict[str, object]:
     chunks = chunk_segments(transcript.segments, max_chars_per_chunk) if transcript else []
@@ -266,4 +342,11 @@ def build_dify_payload(
         "segments": [segment.model_dump() for segment in transcript.segments] if transcript else [],
         "chunks": [chunk.model_dump() for chunk in chunks],
         "chapters": [chapter.model_dump() for chapter in metadata.chapters] if metadata else [],
+        "visual_summary": visual_analysis.summary if visual_analysis else "",
+        "keyframes": [frame.model_dump(exclude={"image_base64"}) for frame in visual_analysis.keyframes]
+        if visual_analysis
+        else [],
+        "frame_grids": [grid.model_dump(exclude={"image_base64"}) for grid in visual_analysis.frame_grids]
+        if visual_analysis
+        else [],
     }
