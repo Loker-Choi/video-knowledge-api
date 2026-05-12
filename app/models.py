@@ -21,7 +21,7 @@ class ExtractRequest(BaseModel):
     fallback_to_glm_stt: bool = Field(default=False)
     include_visual_analysis: bool = Field(default=False)
     include_keyframes: bool = Field(default=False)
-    frame_interval: int = Field(default=6, ge=1, le=300)
+    frame_interval: int = Field(default=6, ge=1, le=30)
     grid_size: list[int] = Field(default_factory=lambda: [2, 2], min_length=2, max_length=2)
     max_keyframes: int = Field(default=16, ge=1, le=64)
     stt_segment_seconds: int = Field(default=25, ge=5, le=30)
