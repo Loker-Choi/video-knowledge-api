@@ -233,7 +233,7 @@ POST /v1/video/generate_note
 }
 ```
 
-失败响应也会返回 HTTP 200，方便工作流继续处理：
+失败响应会保留相同 JSON 结构，并使用标准 HTTP 状态码，例如参数错误返回 `422`，无字幕返回 `404`，处理超时返回 `504`：
 
 ```json
 {
@@ -421,7 +421,7 @@ Content-Type: application/json
 - 平台字幕可用性会影响解析结果
 - GLM-ASR 和 GLM 视觉解析需要设置 `GLM_API_KEY`
 - 视觉解析会下载低清视频并调用 GLM 视觉模型，耗时和额度消耗高于字幕读取
-- 默认单次同步请求最长等待 `REQUEST_TIMEOUT_SECONDS` 秒
+- 默认单次同步请求最长等待 `REQUEST_TIMEOUT_SECONDS` 秒，超时后会终止当前 worker 进程
 - 默认同时处理 `MAX_CONCURRENT_TASKS` 个视频任务
 - 临时缓存默认自动清理，调试时可设置 `KEEP_CACHE=true`
 

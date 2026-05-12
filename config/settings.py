@@ -18,7 +18,7 @@ class Settings(BaseSettings):
     port: int = Field(default=8000, ge=1, le=65535)
 
     cors_allow_origins_raw: str = Field(default="*", alias="CORS_ALLOW_ORIGINS")
-    request_timeout_seconds: int = Field(default=600, ge=30, le=3600)
+    request_timeout_seconds: int = Field(default=600, ge=1, le=3600)
     max_concurrent_tasks: int = Field(default=2, ge=1, le=8)
     yt_dlp_timeout_seconds: int = Field(default=120, ge=10, le=600)
     http_timeout_seconds: int = Field(default=20, ge=5, le=120)

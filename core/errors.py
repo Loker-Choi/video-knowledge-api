@@ -49,7 +49,7 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
         for error in exc.errors()
     ]
     return JSONResponse(
-        status_code=200,
+        status_code=422,
         content={
             "ok": False,
             "error": "VALIDATION_ERROR",
@@ -62,7 +62,7 @@ async def validation_error_handler(_: Request, exc: RequestValidationError) -> J
 
 async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
     return JSONResponse(
-        status_code=200,
+        status_code=500,
         content={
             "ok": False,
             "error": "INTERNAL_ERROR",
