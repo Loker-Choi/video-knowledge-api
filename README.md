@@ -14,7 +14,7 @@
 
 ## 🎬 项目简介
 
-Video Knowledge API 是一个基于 FastAPI 开发的轻量视频解析服务，可以把 YouTube 或 Bilibili 视频链接解析为结构化 JSON，返回视频元信息、时间轴字幕、纯文本字幕、分块文本，并可按需启用 GLM-ASR 音频转写和 GLM 视觉解析。
+Video Knowledge API 是一个基于 FastAPI 开发的轻量视频解析服务，可以把 YouTube 或 Bilibili 视频链接解析为结构化 JSON，返回视频元信息、时间轴字幕、纯文本字幕、分块文本，并默认启用 GLM-ASR 音频转写兜底和 GLM 视觉解析。
 
 项目参考并致谢：
 
@@ -96,8 +96,14 @@ curl https://你的-codespace-名字-8000.app.github.dev/health
   "service": "video-knowledge-api",
   "version": "0.2.0",
   "ffmpeg": true,
-  "glm_configured": false,
-  "bilibili_cookie_configured": false
+  "glm_configured": true,
+  "bilibili_cookie_configured": true,
+  "bilibili_cookie_source": "env",
+  "defaults": {
+    "fallback_to_glm_stt": true,
+    "include_visual_analysis": true
+  },
+  "ready": true
 }
 ```
 
@@ -164,10 +170,11 @@ copy .env.example .env
 | `CORS_ALLOW_ORIGINS` | 浏览器跨域来源，默认 `*` |
 | `REQUEST_TIMEOUT_SECONDS` | 单次同步请求最大等待时间 |
 | `MAX_CONCURRENT_TASKS` | 同时处理的视频任务数量 |
-| `COOKIE_STORE_PATH` | Bilibili Cookie 保存位置 |
+| `COOKIE_STORE_PATH` | 接口临时写入 Cookie 时的保存位置 |
 | `CACHE_ROOT` | 音频、视频、关键帧临时缓存目录 |
 | `KEEP_CACHE` | 调试时保留缓存文件，默认 `false` |
-| `GLM_API_KEY` | 开启 GLM-ASR 或视觉解析时需要 |
+| `GLM_API_KEY` | 必填，用于 GLM-ASR 和视觉解析 |
+| `BILIBILI_COOKIE` | 必填，用于读取 Bilibili 字幕、音频和视频 |
 | `YTDLP_COOKIES_FILE` | 进阶用法，指定 Netscape 格式 Cookie 文件 |
 
 `.env`、`.secrets/`、`.cache/`、`*.cookies.txt` 已写入 `.gitignore`。
@@ -206,9 +213,9 @@ POST /v1/video/generate_note
 | `languages` | 字幕语言优先级 |
 | `include_metadata` | 返回标题、时长、作者等信息 |
 | `max_chars_per_chunk` | 单个文本分块最大字符数 |
-| `fallback_to_glm_stt` | 没有平台字幕时启用 GLM-ASR |
-| `include_visual_analysis` | 启用 GLM 视觉解析 |
-| `include_keyframes` | 只抽取关键帧和拼图，不调用视觉模型 |
+| `fallback_to_glm_stt` | 默认 `true`，没有平台字幕时启用 GLM-ASR |
+| `include_visual_analysis` | 默认 `true`，启用 GLM 视觉解析 |
+| `include_keyframes` | 抽取关键帧和拼图 |
 | `frame_interval` | 每隔多少秒抽取一帧，默认 `6` |
 | `grid_size` | 拼图布局，默认 `[2, 2]` |
 | `max_keyframes` | 最多抽取多少帧，默认 `16` |
@@ -321,39 +328,35 @@ curl "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies/bilibi
 
 ## 🧠 GLM-ASR 与视觉解析
 
-只读取平台字幕时，不需要 `GLM_API_KEY`。启用 GLM-ASR 或视觉解析前，需要在运行环境中配置：
+当前项目默认启用 GLM-ASR 兜底和 GLM 视觉解析，运行前需要在 `.env` 中配置 `GLM_API_KEY`。Bilibili 视频还需要配置 `BILIBILI_COOKIE`。
 
 ```bash
-export GLM_API_KEY="换成你的智谱 API Key"
-python main.py
+cp .env.example .env
+code .env
 ```
 
-PowerShell：
+`.env` 中填写：
 
-```powershell
-$env:GLM_API_KEY="换成你的智谱 API Key"
-python main.py
+```env
+GLM_API_KEY=换成你的智谱APIKey
+BILIBILI_COOKIE="SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"
 ```
 
 <p align="center">
   <img src="assets/glm-api-key.png" alt="GLM API Key 配置示意图" width="900" />
 </p>
 
-启用 GLM-ASR：
+配置完成后重启服务：
 
-```json
-{
-  "url": "https://www.bilibili.com/video/BVxxxxxx",
-  "fallback_to_glm_stt": true
-}
+```bash
+RESTART=1 bash .devcontainer/start-api.sh
 ```
 
-启用视觉解析：
+请求示例：
 
 ```json
 {
   "url": "https://www.bilibili.com/video/BVxxxxxx",
-  "include_visual_analysis": true,
   "frame_interval": 6,
   "grid_size": [2, 2],
   "max_keyframes": 16
@@ -417,9 +420,9 @@ Content-Type: application/json
 
 - 支持平台：YouTube、Bilibili
 - YouTube 字幕读取可能受网络环境影响
-- Bilibili AI 字幕需要 Cookie 登录态
+- Bilibili 视频需要配置 `BILIBILI_COOKIE`
 - 平台字幕可用性会影响解析结果
-- GLM-ASR 和 GLM 视觉解析需要设置 `GLM_API_KEY`
+- GLM-ASR 和 GLM 视觉解析默认开启，需要设置 `GLM_API_KEY`
 - 视觉解析会下载低清视频并调用 GLM 视觉模型，耗时和额度消耗高于字幕读取
 - 默认单次同步请求最长等待 `REQUEST_TIMEOUT_SECONDS` 秒，超时后会终止当前 worker 进程
 - 默认同时处理 `MAX_CONCURRENT_TASKS` 个视频任务
@@ -431,7 +434,9 @@ Content-Type: application/json
 | --- | --- |
 | `/health` 访问失败 | 检查服务是否启动、端口是否 Public、URL 是否复制完整 |
 | `No module named 'uvicorn'` | 依赖还没有安装完成，运行 `pip install -r requirements.txt` 后再运行 `python main.py` |
-| `NO_TRANSCRIPT` | 视频没有可读取字幕，Bilibili 可先配置 Cookie，或开启 GLM-ASR |
+| `MISSING_GLM_API_KEY` | 在 `.env` 中填写 `GLM_API_KEY`，然后重启服务 |
+| `MISSING_BILIBILI_COOKIE` | 在 `.env` 中填写 `BILIBILI_COOKIE`，然后重启服务 |
+| `NO_TRANSCRIPT` | 视频没有可读取字幕，服务会继续尝试 GLM-ASR 兜底 |
 | `VALIDATION_ERROR` | 检查请求体字段类型，例如 `url` 必须是字符串 |
 | `REQUEST_TIMEOUT` | 视频处理时间过长，减少视觉解析参数或提高超时时间 |
 | `SERVER_BUSY` | 当前服务正在处理其他视频，稍后重试 |

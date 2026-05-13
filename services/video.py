@@ -11,12 +11,14 @@ from app.extractors import (
 )
 from app.models import ExtractRequest, ExtractResponse, MetadataInfo, TranscriptInfo, VisualAnalysisInfo
 from app.platforms import Platform, detect_platform
+from config import get_settings
 from services.cookies import cookie_service
 from services.dify_payload import build_dify_payload
 from services.visual import fetch_glm_stt_transcript, fetch_visual_analysis
 
 
 def extract_video_payload(payload: ExtractRequest) -> ExtractResponse:
+    payload = payload.model_copy(update={"fallback_to_glm_stt": True, "include_visual_analysis": True})
     url = str(payload.url)
     platform = detect_platform(url)
     warnings: list[str] = []
@@ -31,6 +33,25 @@ def extract_video_payload(payload: ExtractRequest) -> ExtractResponse:
             url=url,
             error="UNSUPPORTED_PLATFORM",
             warnings=["Only Bilibili and YouTube URLs are supported."],
+            max_chars_per_chunk=payload.max_chars_per_chunk,
+        )
+
+    settings = get_settings()
+    if not settings.glm_enabled:
+        return failure_response(
+            platform=platform.value,
+            url=url,
+            error="MISSING_GLM_API_KEY",
+            warnings=["请在 .env 中配置 GLM_API_KEY，然后重启服务。"],
+            max_chars_per_chunk=payload.max_chars_per_chunk,
+        )
+
+    if platform == Platform.BILIBILI and not cookie_service().get("bilibili"):
+        return failure_response(
+            platform=platform.value,
+            url=url,
+            error="MISSING_BILIBILI_COOKIE",
+            warnings=["请在 .env 中配置 BILIBILI_COOKIE，然后重启服务。"],
             max_chars_per_chunk=payload.max_chars_per_chunk,
         )
 

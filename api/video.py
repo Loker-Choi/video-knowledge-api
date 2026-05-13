@@ -19,6 +19,8 @@ _worker_context = multiprocessing.get_context("spawn")
 
 ERROR_STATUS_CODES = {
     "UNSUPPORTED_PLATFORM": 400,
+    "MISSING_GLM_API_KEY": 400,
+    "MISSING_BILIBILI_COOKIE": 400,
     "NO_TRANSCRIPT": 404,
     "SERVER_BUSY": 429,
     "REQUEST_TIMEOUT": 504,

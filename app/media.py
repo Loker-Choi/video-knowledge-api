@@ -9,7 +9,7 @@ from typing import Any
 from PIL import Image, ImageDraw, ImageFont
 from yt_dlp import YoutubeDL
 
-from .cookies import CookieStore, write_temp_cookiefile
+from .cookies import configured_cookie_store, write_temp_cookiefile
 from .extractors import cleanup_temp_cookiefile
 from .models import FrameGridInfo, KeyframeInfo
 from .text_utils import seconds_to_timestamp
@@ -71,7 +71,7 @@ def download_media(url: str, platform: str, output_dir: Path, *, media_type: str
     if settings.ytdlp_cookies_file:
         options["cookiefile"] = str(settings.ytdlp_cookies_file)
     else:
-        cookie = CookieStore(settings.cookie_store_path).get(platform)
+        cookie = configured_cookie_store().get(platform)
         if cookie:
             options["cookiefile"] = write_temp_cookiefile(platform, cookie)
 

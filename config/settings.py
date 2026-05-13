@@ -30,6 +30,8 @@ class Settings(BaseSettings):
 
     glm_api_key: str | None = None
     zhipuai_api_key: str | None = None
+    bilibili_cookie: str | None = None
+    youtube_cookie: str | None = None
 
     model_config = SettingsConfigDict(
         env_file=".env",

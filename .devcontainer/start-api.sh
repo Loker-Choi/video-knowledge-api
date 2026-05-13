@@ -18,7 +18,7 @@ ensure_dependencies() {
     return
   fi
 
-  echo "Python dependencies are missing. Installing requirements.txt..."
+  echo "检测到 Python 依赖缺失，正在安装 requirements.txt..."
   "$PYTHON_BIN" -m pip install -r requirements.txt
 }
 
@@ -38,7 +38,7 @@ stop_existing() {
   fi
 
   if kill -0 "$existing_pid" >/dev/null 2>&1; then
-    echo "Stopping existing Video Knowledge API process ${existing_pid}..."
+    echo "正在停止已有的 Video Knowledge API 进程 ${existing_pid}..."
     kill "$existing_pid" >/dev/null 2>&1 || true
     for _ in $(seq 1 10); do
       if ! kill -0 "$existing_pid" >/dev/null 2>&1; then
@@ -56,7 +56,7 @@ if [ "$RESTART" = "1" ] || [ "$RESTART" = "true" ]; then
 fi
 
 if is_healthy; then
-  echo "Video Knowledge API is already running on port ${PORT}."
+  echo "Video Knowledge API 已经在 ${PORT} 端口运行。"
   exit 0
 fi
 
@@ -65,25 +65,25 @@ mkdir -p "$(dirname "$LOG_FILE")"
 
 ensure_dependencies
 
-echo "Starting Video Knowledge API on port ${PORT}..."
+echo "正在启动 Video Knowledge API，端口：${PORT}..."
 nohup "$PYTHON_BIN" main.py >> "$LOG_FILE" 2>&1 &
 echo "$!" > "$PID_FILE"
 
 for _ in $(seq 1 30); do
   if is_healthy; then
-    echo "Video Knowledge API is running."
-    echo "Health: http://127.0.0.1:${PORT}/health"
-    echo "Logs: tail -f ${LOG_FILE}"
+    echo "Video Knowledge API 已启动。"
+    echo "健康检查：http://127.0.0.1:${PORT}/health"
+    echo "日志查看：tail -f ${LOG_FILE}"
     exit 0
   fi
   if ! kill -0 "$(cat "$PID_FILE")" >/dev/null 2>&1; then
-    echo "Video Knowledge API failed to start. Recent logs:"
+    echo "Video Knowledge API 启动失败，最近日志如下："
     tail -80 "$LOG_FILE"
     exit 1
   fi
   sleep 1
 done
 
-echo "Video Knowledge API did not become healthy within 30 seconds. Recent logs:"
+echo "Video Knowledge API 在 30 秒内没有通过健康检查，最近日志如下："
 tail -80 "$LOG_FILE"
 exit 1

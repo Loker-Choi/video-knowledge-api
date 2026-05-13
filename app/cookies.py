@@ -13,8 +13,9 @@ REQUIRED_COOKIE_KEYS = {
 
 
 class CookieStore:
-    def __init__(self, filepath: str | Path = ".secrets/cookies.json"):
+    def __init__(self, filepath: str | Path = ".secrets/cookies.json", env_cookies: dict[str, str | None] | None = None):
         self.path = Path(filepath)
+        self.env_cookies = env_cookies or {}
         self.path.parent.mkdir(parents=True, exist_ok=True)
 
     def _read(self) -> dict[str, dict[str, str]]:
@@ -33,6 +34,9 @@ class CookieStore:
             json.dump(data, file, ensure_ascii=False, indent=2)
 
     def get(self, platform: str) -> str | None:
+        env_value = self.env_cookies.get(platform)
+        if isinstance(env_value, str) and env_value.strip():
+            return env_value.strip()
         data = self._read()
         value = data.get(platform, {}).get("cookie")
         return value if isinstance(value, str) and value.strip() else None
@@ -62,10 +66,15 @@ class CookieStore:
         return {
             "platform": platform,
             "configured": bool(cookie),
+            "source": "env" if self._has_env_cookie(platform) else "store" if cookie else None,
             "cookie_count": len(keys),
             "required_keys_present": present,
             "required_keys_missing": missing,
         }
+
+    def _has_env_cookie(self, platform: str) -> bool:
+        value = self.env_cookies.get(platform)
+        return isinstance(value, str) and bool(value.strip())
 
 
 def validate_platform(platform: str) -> None:
@@ -115,3 +124,16 @@ def write_temp_cookiefile(platform: str, cookie: str) -> str:
         return file.name
     finally:
         file.close()
+
+
+def configured_cookie_store() -> CookieStore:
+    from config import get_settings
+
+    settings = get_settings()
+    return CookieStore(
+        settings.cookie_store_path,
+        env_cookies={
+            "bilibili": settings.bilibili_cookie,
+            "youtube": settings.youtube_cookie,
+        },
+    )

@@ -18,8 +18,8 @@ class ExtractRequest(BaseModel):
     max_chars_per_chunk: int = Field(default=5000, ge=500, le=20000)
     preserve_formatting: bool = Field(default=False)
 
-    fallback_to_glm_stt: bool = Field(default=False)
-    include_visual_analysis: bool = Field(default=False)
+    fallback_to_glm_stt: bool = Field(default=True)
+    include_visual_analysis: bool = Field(default=True)
     include_keyframes: bool = Field(default=False)
     frame_interval: int = Field(default=6, ge=1, le=30)
     grid_size: list[int] = Field(default_factory=lambda: [2, 2], min_length=2, max_length=2)

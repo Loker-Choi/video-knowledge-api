@@ -9,7 +9,7 @@ from typing import Any
 from youtube_transcript_api import YouTubeTranscriptApi
 from yt_dlp import YoutubeDL
 
-from .cookies import CookieStore, write_temp_cookiefile
+from .cookies import configured_cookie_store, write_temp_cookiefile
 from .models import ChapterInfo, MetadataInfo, TranscriptInfo, TranscriptSegment
 from .platforms import extract_youtube_video_id
 from .subtitles import parse_subtitle_text
@@ -86,7 +86,7 @@ def ytdlp_options(platform: str | None = None) -> dict[str, Any]:
     if settings.ytdlp_cookies_file:
         options["cookiefile"] = str(settings.ytdlp_cookies_file)
     elif platform:
-        cookie = CookieStore(settings.cookie_store_path).get(platform)
+        cookie = configured_cookie_store().get(platform)
         if cookie:
             options["cookiefile"] = write_temp_cookiefile(platform, cookie)
     return options
