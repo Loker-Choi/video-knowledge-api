@@ -76,12 +76,6 @@ python main.py
 bash .devcontainer/start-api.sh
 ```
 
-查看启动日志：
-
-```bash
-tail -f /tmp/video-knowledge-api.log
-```
-
 健康检查：
 
 ```bash
@@ -170,7 +164,7 @@ copy .env.example .env
 | `CORS_ALLOW_ORIGINS` | 浏览器跨域来源，默认 `*` |
 | `REQUEST_TIMEOUT_SECONDS` | 单次同步请求最大等待时间 |
 | `MAX_CONCURRENT_TASKS` | 同时处理的视频任务数量 |
-| `COOKIE_STORE_PATH` | 接口临时写入 Cookie 时的保存位置 |
+| `COOKIE_STORE_PATH` | Cookie 本地保存位置 |
 | `CACHE_ROOT` | 音频、视频、关键帧临时缓存目录 |
 | `KEEP_CACHE` | 调试时保留缓存文件，默认 `false` |
 | `GLM_API_KEY` | 必填，用于 GLM-ASR 和视觉解析 |
@@ -295,36 +289,7 @@ Cookie 通常包含：
 SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx
 ```
 
-Cookie 属于个人登录凭证，请妥善保存。泄露后建议退出 Bilibili 登录或刷新登录态。
-
-### 写入 Bilibili Cookie
-
-```bash
-curl -X POST "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "platform": "bilibili",
-    "cookie": "SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"
-  }'
-```
-
-PowerShell 示例：
-
-```powershell
-Invoke-RestMethod `
-  -Method Post `
-  -Uri "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies" `
-  -ContentType "application/json" `
-  -Body '{"platform":"bilibili","cookie":"SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx"}'
-```
-
-查看 Cookie 状态：
-
-```bash
-curl "https://你的-codespace-名字-8000.app.github.dev/v1/auth/cookies/bilibili"
-```
-
-如果 `required_keys_missing` 是空数组，说明关键字段已经齐全。
+Cookie 属于个人登录凭证，请粘贴到 `.env` 的 `BILIBILI_COOKIE` 中，并妥善保存。泄露后建议退出 Bilibili 登录或刷新登录态。
 
 ## 🧠 GLM-ASR 与视觉解析
 
@@ -451,9 +416,6 @@ Content-Type: application/json
 | `POST` | `/api/generate_note` | 同步解析视频 |
 | `POST` | `/v1/video/extract` | 同步解析视频，兼容接口 |
 | `POST` | `/v1/video/generate_note` | 同步解析视频，兼容接口 |
-| `POST` | `/v1/auth/cookies` | 保存 Cookie |
-| `GET` | `/v1/auth/cookies/bilibili` | 查看 Cookie 状态 |
-| `DELETE` | `/v1/auth/cookies/bilibili` | 删除 Cookie |
 | `GET` | `/docs` | Swagger UI |
 | `GET` | `/openapi.json` | OpenAPI 文档 |
 

@@ -73,7 +73,6 @@ for _ in $(seq 1 30); do
   if is_healthy; then
     echo "Video Knowledge API 已启动。"
     echo "健康检查：http://127.0.0.1:${PORT}/health"
-    echo "日志查看：tail -f ${LOG_FILE}"
     exit 0
   fi
   if ! kill -0 "$(cat "$PID_FILE")" >/dev/null 2>&1; then
