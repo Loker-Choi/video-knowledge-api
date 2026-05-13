@@ -7,6 +7,7 @@ PORT="${PORT:-8000}"
 LOG_FILE="/tmp/video-knowledge-api.log"
 PID_FILE="/tmp/video-knowledge-api.pid"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
+RESTART="${RESTART:-false}"
 
 if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
   PYTHON_BIN="python"
@@ -24,6 +25,35 @@ ensure_dependencies() {
 is_healthy() {
   curl -fsS "http://127.0.0.1:${PORT}/health" >/dev/null 2>&1
 }
+
+stop_existing() {
+  if [ ! -f "$PID_FILE" ]; then
+    return
+  fi
+
+  existing_pid="$(cat "$PID_FILE" 2>/dev/null || true)"
+  if [ -z "$existing_pid" ]; then
+    rm -f "$PID_FILE"
+    return
+  fi
+
+  if kill -0 "$existing_pid" >/dev/null 2>&1; then
+    echo "Stopping existing Video Knowledge API process ${existing_pid}..."
+    kill "$existing_pid" >/dev/null 2>&1 || true
+    for _ in $(seq 1 10); do
+      if ! kill -0 "$existing_pid" >/dev/null 2>&1; then
+        break
+      fi
+      sleep 1
+    done
+  fi
+
+  rm -f "$PID_FILE"
+}
+
+if [ "$RESTART" = "1" ] || [ "$RESTART" = "true" ]; then
+  stop_existing
+fi
 
 if is_healthy; then
   echo "Video Knowledge API is already running on port ${PORT}."
