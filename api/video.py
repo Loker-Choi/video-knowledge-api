@@ -85,7 +85,12 @@ def run_with_timeout(payload: ExtractRequest) -> ExtractResponse:
         started_at = time.monotonic()
 
         while True:
-            process.join(timeout=1)
+            result = try_get_worker_result(result_queue)
+            if result is not None:
+                process.join(timeout=5)
+                return response_from_worker_result(result, url)
+
+            process.join(timeout=0.2)
             if not process.is_alive():
                 break
             if is_cancelled(request_id):
@@ -135,20 +140,7 @@ def run_with_timeout(payload: ExtractRequest) -> ExtractResponse:
                 error="WORKER_CRASHED",
             )
 
-        if result.get("ok"):
-            response = ExtractResponse.model_validate(result["response"])
-            log_stage("request_completed", ok=response.ok, error=response.error)
-            return response
-
-        log_stage("worker_failed", message=str(result.get("message") or "Worker failed."))
-        return ExtractResponse(
-            ok=False,
-            platform="unknown",
-            url=url,
-            dify_payload=empty_dify_payload(url),
-            warnings=[str(result.get("message") or "Worker failed.")],
-            error="WORKER_FAILED",
-        )
+        return response_from_worker_result(result, url)
     finally:
         clear_active_task(request_id)
         close_queue(result_queue)
@@ -195,6 +187,30 @@ def extract_worker(payload_data: dict[str, Any], result_queue: multiprocessing.Q
     except BaseException as exc:
         log_stage("worker_exception", message=str(exc), exc_type=type(exc).__name__)
         result_queue.put({"ok": False, "message": str(exc)})
+
+
+def try_get_worker_result(result_queue: multiprocessing.Queue[dict[str, Any]]) -> dict[str, Any] | None:
+    try:
+        return result_queue.get_nowait()
+    except queue.Empty:
+        return None
+
+
+def response_from_worker_result(result: dict[str, Any], url: str) -> ExtractResponse:
+    if result.get("ok"):
+        response = ExtractResponse.model_validate(result["response"])
+        log_stage("request_completed", ok=response.ok, error=response.error)
+        return response
+
+    log_stage("worker_failed", message=str(result.get("message") or "Worker failed."))
+    return ExtractResponse(
+        ok=False,
+        platform="unknown",
+        url=url,
+        dify_payload=empty_dify_payload(url),
+        warnings=[str(result.get("message") or "Worker failed.")],
+        error="WORKER_FAILED",
+    )
 
 
 def response_with_status(response: ExtractResponse) -> JSONResponse:
