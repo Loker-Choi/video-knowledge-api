@@ -163,13 +163,10 @@ copy .env.example .env
 | `PORT` | 服务端口，默认 `8000` |
 | `CORS_ALLOW_ORIGINS` | 浏览器跨域来源，默认 `*` |
 | `REQUEST_TIMEOUT_SECONDS` | 单次同步请求最大等待时间 |
-| `MAX_CONCURRENT_TASKS` | 同时处理的视频任务数量 |
-| `COOKIE_STORE_PATH` | Cookie 本地保存位置 |
 | `CACHE_ROOT` | 音频、视频、关键帧临时缓存目录 |
 | `KEEP_CACHE` | 调试时保留缓存文件，默认 `false` |
 | `GLM_API_KEY` | 必填，用于 GLM-ASR 和视觉解析 |
 | `BILIBILI_COOKIE` | 必填，用于读取 Bilibili 字幕、音频和视频 |
-| `YTDLP_COOKIES_FILE` | 进阶用法，指定 Netscape 格式 Cookie 文件 |
 
 `.env`、`.secrets/`、`.cache/`、`*.cookies.txt` 已写入 `.gitignore`。
 
@@ -390,7 +387,7 @@ Content-Type: application/json
 - GLM-ASR 和 GLM 视觉解析默认开启，需要设置 `GLM_API_KEY`
 - 视觉解析会下载低清视频并调用 GLM 视觉模型，耗时和额度消耗高于字幕读取
 - 默认单次同步请求最长等待 `REQUEST_TIMEOUT_SECONDS` 秒，超时后会终止当前 worker 进程
-- 默认同时处理 `MAX_CONCURRENT_TASKS` 个视频任务
+- 连续发起新请求时，服务会取消上一个未完成的视频任务，优先处理最新请求
 - 临时缓存默认自动清理，调试时可设置 `KEEP_CACHE=true`
 
 ## 🛠️ 常见错误
@@ -404,7 +401,7 @@ Content-Type: application/json
 | `NO_TRANSCRIPT` | 视频没有可读取字幕，服务会继续尝试 GLM-ASR 兜底 |
 | `VALIDATION_ERROR` | 检查请求体字段类型，例如 `url` 必须是字符串 |
 | `REQUEST_TIMEOUT` | 视频处理时间过长，减少视觉解析参数或提高超时时间 |
-| `SERVER_BUSY` | 当前服务正在处理其他视频，稍后重试 |
+| `REQUEST_CANCELLED` | 有更新的视频请求进入，当前任务已被取消 |
 | `GLM STT fallback failed` | 检查 `GLM_API_KEY` 是否配置正确 |
 | `ffmpeg is required` | 安装 ffmpeg 后重新启动服务 |
 

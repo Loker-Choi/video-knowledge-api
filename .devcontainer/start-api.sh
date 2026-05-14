@@ -14,12 +14,32 @@ if ! command -v "$PYTHON_BIN" >/dev/null 2>&1; then
 fi
 
 ensure_dependencies() {
-  if "$PYTHON_BIN" -c "import uvicorn, fastapi, yt_dlp" >/dev/null 2>&1; then
+  if "$PYTHON_BIN" -c "import uvicorn, fastapi, yt_dlp, zhipuai, PIL, dotenv, pydantic_settings" >/dev/null 2>&1; then
     return
   fi
 
   echo "检测到 Python 依赖缺失，正在安装 requirements.txt..."
   "$PYTHON_BIN" -m pip install -r requirements.txt
+}
+
+ensure_ffmpeg() {
+  if command -v ffmpeg >/dev/null 2>&1; then
+    return
+  fi
+
+  echo "检测到 ffmpeg 缺失，正在安装 ffmpeg..."
+  if ! sudo apt-get update; then
+    echo "ffmpeg 安装失败：apt-get update 执行失败。"
+    exit 1
+  fi
+  if ! sudo apt-get install -y ffmpeg; then
+    echo "ffmpeg 安装失败：apt-get install 执行失败。"
+    exit 1
+  fi
+  if ! command -v ffmpeg >/dev/null 2>&1; then
+    echo "ffmpeg 安装后仍未检测到，请检查 Codespaces 环境。"
+    exit 1
+  fi
 }
 
 is_healthy() {
@@ -51,8 +71,23 @@ stop_existing() {
   rm -f "$PID_FILE"
 }
 
+stop_leftovers() {
+  echo "正在清理残留的 Video Knowledge API worker..."
+  pkill -TERM -f "[m]ultiprocessing.spawn" >/dev/null 2>&1 || true
+  pkill -TERM -f "[m]ultiprocessing.resource_tracker" >/dev/null 2>&1 || true
+  pkill -TERM -f "[p]ython3 main.py" >/dev/null 2>&1 || true
+  pkill -TERM -f "[p]ython main.py" >/dev/null 2>&1 || true
+  sleep 2
+  pkill -KILL -f "[m]ultiprocessing.spawn" >/dev/null 2>&1 || true
+  pkill -KILL -f "[m]ultiprocessing.resource_tracker" >/dev/null 2>&1 || true
+  pkill -KILL -f "[p]ython3 main.py" >/dev/null 2>&1 || true
+  pkill -KILL -f "[p]ython main.py" >/dev/null 2>&1 || true
+  rm -f "$PID_FILE"
+}
+
 if [ "$RESTART" = "1" ] || [ "$RESTART" = "true" ]; then
   stop_existing
+  stop_leftovers
 fi
 
 if is_healthy; then
@@ -64,6 +99,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 : > "$LOG_FILE"
 
 ensure_dependencies
+ensure_ffmpeg
 
 echo "正在启动 Video Knowledge API，端口：${PORT}..."
 nohup "$PYTHON_BIN" main.py >> "$LOG_FILE" 2>&1 &

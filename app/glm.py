@@ -9,6 +9,7 @@ from .extractors import build_transcript
 from .media import split_audio
 from .models import FrameGridInfo, TranscriptInfo, VisualAnalysisInfo
 from config import get_settings
+from utils.stage_log import log_stage
 
 
 class GlmError(RuntimeError):
@@ -40,16 +41,20 @@ def transcribe_audio_with_glm(
     if not segments:
         raise GlmError("No audio segments were generated for GLM STT")
 
+    log_stage("glm_stt_segments_ready", count=len(segments))
     raw_segments: list[dict[str, object]] = []
     for index, segment_path in enumerate(segments):
         start = float(index * segment_seconds)
+        log_stage("glm_stt_segment_start", index=index, size_bytes=segment_path.stat().st_size if segment_path.exists() else None)
         text = transcribe_audio_segment(client, segment_path, model=model)
+        log_stage("glm_stt_segment_done", index=index, text_length=len(text))
         if text:
             raw_segments.append({"start": start, "duration": float(segment_seconds), "text": text})
 
     if not raw_segments:
         raise GlmError("GLM STT returned empty transcript")
 
+    log_stage("glm_stt_transcript_done", raw_segments=len(raw_segments))
     return build_transcript(
         source="glm_asr",
         raw_segments=raw_segments,
@@ -60,10 +65,12 @@ def transcribe_audio_with_glm(
 
 def transcribe_audio_segment(client: Any, segment_path: Path, *, model: str) -> str:
     with segment_path.open("rb") as audio_file:
+        log_stage("glm_audio_api_start", model=model)
         response = client.audio.transcriptions.create(
             model=model,
             file=audio_file,
         )
+    log_stage("glm_audio_api_done", model=model)
     text = getattr(response, "text", None)
     if text is None and isinstance(response, dict):
         text = response.get("text")
@@ -100,11 +107,13 @@ def analyze_frame_grids_with_glm(
         enriched_grids.append(grid.model_copy(update={"image_base64": None}))
         keyframes.extend(grid.keyframes)
 
+    log_stage("glm_visual_api_start", model=model, grids=len(enriched_grids), keyframes=len(keyframes))
     response = client.chat.completions.create(
         model=model,
         messages=[{"role": "user", "content": content}],
     )
     summary = response.choices[0].message.content if getattr(response, "choices", None) else ""
+    log_stage("glm_visual_api_done", model=model, summary_length=len(str(summary or "")))
     return VisualAnalysisInfo(
         source="glm_vision",
         model=model,

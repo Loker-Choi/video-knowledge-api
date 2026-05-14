@@ -14,6 +14,7 @@ from .extractors import cleanup_temp_cookiefile
 from .models import FrameGridInfo, KeyframeInfo
 from .text_utils import seconds_to_timestamp
 from config import get_settings
+from utils.stage_log import log_stage
 
 
 class MediaError(RuntimeError):
@@ -36,6 +37,7 @@ def download_media(url: str, platform: str, output_dir: Path, *, media_type: str
     ensure_ffmpeg()
     settings = get_settings()
     output_dir.mkdir(parents=True, exist_ok=True)
+    log_stage("media_download_prepare", media_type=media_type, platform=platform)
 
     if media_type == "audio":
         options: dict[str, Any] = {
@@ -76,18 +78,23 @@ def download_media(url: str, platform: str, output_dir: Path, *, media_type: str
             options["cookiefile"] = write_temp_cookiefile(platform, cookie)
 
     try:
+        log_stage("ytdlp_download_start", media_type=media_type)
         with YoutubeDL(options) as ydl:
             ydl.download([url])
+        log_stage("ytdlp_download_done", media_type=media_type)
     except Exception as exc:
+        log_stage("ytdlp_download_failed", media_type=media_type, message=str(exc))
         raise MediaError(f"yt-dlp failed to download {media_type}: {exc}") from exc
     finally:
         cleanup_temp_cookiefile(options.get("cookiefile"))
 
     if expected.exists():
+        log_stage("media_download_found", media_type=media_type, size_bytes=expected.stat().st_size)
         return expected
 
     candidates = sorted(output_dir.glob(f"{media_type}.*"))
     if candidates:
+        log_stage("media_download_found", media_type=media_type, size_bytes=candidates[0].stat().st_size)
         return candidates[0]
     raise MediaError(f"Downloaded {media_type} file was not found")
 
@@ -120,8 +127,10 @@ def split_audio(
         "48k",
         str(output_pattern),
     ]
+    log_stage("audio_split_start", segment_seconds=segment_seconds, max_segment_mb=max_segment_mb)
     run_command(command)
     segments = sorted(output_dir.glob("segment_*.mp3"))
+    log_stage("audio_split_done", segments=len(segments))
     oversized = [path for path in segments if path.stat().st_size > max_segment_mb * 1024 * 1024]
     if oversized and segment_seconds > 5:
         for path in segments:
@@ -174,6 +183,7 @@ def extract_keyframes(
                 path=str(frame_path),
             )
         )
+    log_stage("keyframe_files_found", count=len(frames))
     return frames
 
 
@@ -222,6 +232,7 @@ def build_frame_grids(
                 keyframes=group,
             )
         )
+    log_stage("frame_grid_files_built", count=len(grids), group_size=group_size)
     return grids
 
 
@@ -252,7 +263,10 @@ def compose_grid_image(
 
 
 def run_command(command: list[str]) -> None:
+    log_stage("command_start", command=command[0], args_count=len(command))
     process = subprocess.run(command, capture_output=True, text=True, check=False, timeout=get_settings().yt_dlp_timeout_seconds)
     if process.returncode != 0:
         stderr = (process.stderr or process.stdout or "").strip()
+        log_stage("command_failed", command=command[0], returncode=process.returncode, message=stderr)
         raise MediaError(stderr or f"Command failed: {' '.join(command)}")
+    log_stage("command_done", command=command[0], returncode=process.returncode)
