@@ -29,13 +29,49 @@ ensure_ffmpeg() {
 
   echo "检测到 ffmpeg 缺失，正在安装 ffmpeg..."
   if ! sudo apt-get update; then
-    echo "ffmpeg 安装失败：apt-get update 执行失败。"
-    exit 1
+    echo "apt-get update 失败，正在使用 Debian 官方源重试..."
+    install_ffmpeg_from_debian_sources
+    return
   fi
   if ! sudo apt-get install -y ffmpeg; then
-    echo "ffmpeg 安装失败：apt-get install 执行失败。"
+    echo "apt-get install 失败，正在使用 Debian 官方源重试..."
+    install_ffmpeg_from_debian_sources
+    return
+  fi
+  verify_ffmpeg
+}
+
+install_ffmpeg_from_debian_sources() {
+  codename="$(. /etc/os-release && echo "${VERSION_CODENAME:-bullseye}")"
+  temp_sources="/tmp/video-knowledge-api-debian.sources.list"
+  cat > "$temp_sources" <<EOF
+deb http://deb.debian.org/debian ${codename} main
+deb http://deb.debian.org/debian-security ${codename}-security main
+deb http://deb.debian.org/debian ${codename}-updates main
+EOF
+
+  if ! sudo apt-get \
+    -o Dir::Etc::sourcelist="$temp_sources" \
+    -o Dir::Etc::sourceparts="-" \
+    -o APT::Get::List-Cleanup="0" \
+    update; then
+    echo "ffmpeg 安装失败：Debian 官方源 update 执行失败。"
     exit 1
   fi
+
+  if ! sudo apt-get \
+    -o Dir::Etc::sourcelist="$temp_sources" \
+    -o Dir::Etc::sourceparts="-" \
+    -o APT::Get::List-Cleanup="0" \
+    install -y ffmpeg; then
+    echo "ffmpeg 安装失败：Debian 官方源 install 执行失败。"
+    exit 1
+  fi
+
+  verify_ffmpeg
+}
+
+verify_ffmpeg() {
   if ! command -v ffmpeg >/dev/null 2>&1; then
     echo "ffmpeg 安装后仍未检测到，请检查 Codespaces 环境。"
     exit 1
